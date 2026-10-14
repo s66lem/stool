@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: Set a repo up for long multi-session work with stool - docs/HANDOFF.md (one RESUME HERE block), docs/HANDOFF-history.md, docs/TODO.md, docs/FIXES.md, and a bookkeeping section in CLAUDE.md, matched to the restart-clock options. Use when the user runs /project-setup or asks to set a project up for handoffs, session restarts or the stool workflow.
+description: Set a repo up for long multi-session work with stool (on a project that already has CLAUDE.md, handoff, TODO or notes files it reviews them and proposes only the missing blocks for the user to pick) - docs/HANDOFF.md (one RESUME HERE block), docs/HANDOFF-history.md, docs/TODO.md, docs/FIXES.md, and a bookkeeping section in CLAUDE.md, matched to the restart-clock options. Use when the user runs /project-setup or asks to set a project up for handoffs, session restarts or the stool workflow.
 argument-hint: "[one line on what the project is]"
 disable-model-invocation: true
 ---
@@ -10,10 +10,26 @@ Set this repo up so any fresh session can pick it up from files alone, and so `s
 ## 1. Look first
 
 - Run `git rev-parse --show-toplevel` and `date -u +"%Y-%m-%d %H:%MZ"` (every time written below comes from that command).
-- Check which of `CLAUDE.md`, `docs/HANDOFF.md`, `docs/HANDOFF-history.md`, `docs/TODO.md`, `docs/FIXES.md` exist. **Never overwrite one that exists**: for an existing file, add only the missing section and say so. An existing handoff under another name or heading: keep it, and tell the user which `restartHandoffFile` / `restartHandoffHeading` options to set instead.
+- Find what the project already has, by role, not only by name: agent instructions (`CLAUDE.md` at any level, `.claude/CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`), a state or handoff doc (`HANDOFF*`, `STATUS*`, `PROGRESS*`, `NOTES*`, `CONTEXT*`, `docs/*state*`), a task list (`TODO*`, `TASKS*`, `ROADMAP*`, `BACKLOG*`), a lessons or decisions log (`FIXES*`, `LESSONS*`, `DECISIONS*`, `CHANGELOG*`, `docs/adr/`). Read each one found.
 - Read the README, the package manifest and `git log --oneline -15` to fill the templates with real facts. Unknowns are written as `unknown` (never invented).
+- **Fresh project** (none of the four roles exists): go to step 2 and write everything.
+- **Existing setup** (any role exists): go to step 1b. Nothing in an existing file is changed, moved or deleted without the user's yes.
 
-## 2. Write the files (Write tool, under `docs/` unless the repo keeps docs elsewhere)
+## 1b. Existing setup: suggest, don't write
+
+For each role, compare what exists with the templates in steps 2 and 3, and sort every difference into one of:
+
+- **Missing**: the role has no file (e.g. no fix log): proposes creating it from the template.
+- **Gap**: the file exists but lacks a piece the workflow needs (no single "current state" block at the top, no rule to update the handoff and TODO at each task end, no "rewrite, don't stack" rule, no archive for old state blocks, no restart rule): proposes the exact lines to add and where (after which heading).
+- **Mapped**: the project already does it under another name or shape (a `STATUS.md` with a "Current" section, a `LESSONS.md`): keep it; propose only the stool options that point at it (`restartHandoffFile`, `restartHandoffHeading`) and, if useful, one line in the instructions file naming it. Never propose renaming or moving the user's files.
+- **Conflict**: an existing rule contradicts the workflow (e.g. "append a dated entry to STATUS.md each session" vs rewriting one block): show both, recommend one, and leave the existing rule unless the user picks the change.
+- **Already there**: say nothing about it beyond a count.
+
+Then show the user ONE proposal, grouped by file, each item numbered with its kind, a one-line why, and the exact text to add (a short fenced block, with the heading it goes under). Ask which to apply (one AskUserQuestion, multi-select, recommended items first; or "reply with the numbers"). Apply only the chosen items, with Edit (inserting at the named place, never rewriting the file) or Write for new files. Items not chosen are listed once in the report and not asked again.
+
+Keep proposals proportional: a project whose instructions file is short and casual gets the short versions (one-line rules); never paste the whole bookkeeping block into a file that already covers half of it, only the missing lines.
+
+## 2. Write the files (fresh project, or the new files the user picked; Write tool, under `docs/` unless the repo keeps docs elsewhere)
 
 **`docs/HANDOFF.md`**: exactly one block, rewritten (never appended to) at each restart:
 
@@ -56,7 +72,7 @@ Set this repo up so any fresh session can pick it up from files alone, and so `s
 
 ## 3. CLAUDE.md
 
-Append (or create the file with a one-line project summary first) a `## Bookkeeping` section, skipped line by line where CLAUDE.md already says the same:
+Fresh project: create the file with a one-line project summary, then this `## Bookkeeping` section. Existing instructions file (CLAUDE.md or another agent's file the project uses instead): never append on your own; its missing lines are Gap items in the step 1b proposal, worded to match the file's voice and pointing at the project's real file names:
 
 ```markdown
 ## Bookkeeping
