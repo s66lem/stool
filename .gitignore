@@ -4,3 +4,5 @@ __pycache__/
 tests/plan-progress/register.mjs
 tests/plan-progress/strip.mjs
 tests/plan-progress/strip-icons.mjs
+CLAUDE.md
+dev/
