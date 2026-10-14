@@ -2,7 +2,7 @@
 
 # 🪑 stool
 
-### **S**tool's **T**ools for **O**rchestration and **O**ptimizing **L**imits
+### **S**tool is **T**ools for **O**rchestration and **O**ptimizing **L**imits
 
 <sub>(Salem's TOOLs)</sub>
 
