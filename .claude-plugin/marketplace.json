@@ -1,0 +1,14 @@
+{
+  "name": "stool",
+  "owner": {
+    "name": "s66lem"
+  },
+  "description": "Claude Code mods in one plugin",
+  "plugins": [
+    {
+      "name": "stool",
+      "source": "./",
+      "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills."
+    }
+  ]
+}

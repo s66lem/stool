@@ -1,0 +1,45 @@
+MIT License
+
+Copyright (c) 2026 s66lem
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Third-party notices
+
+This plugin contains code and text adapted from the projects below, each used
+under the MIT License (the permission notice above applies to them as well).
+
+plan-progress, by Kirill Serditov (zycck)
+https://github.com/zycck/claude-mods
+Copyright (c) Kirill Serditov
+  The progress bars, the settings window and the auto-close logic in
+  hooks/plan-progress/ are ported from and extend this project.
+
+pstack, by Lauren Tan
+https://github.com/cursor/plugins/tree/main/pstack
+Copyright (c) 2026 Lauren Tan
+  The skills ketchup, correct, interrogate, arena, autonomous-run and
+  hillclimb in skills/ are adapted from pstack's skills of the same names
+  (hillclimb from hillclimb and benchmark-checklist).
+
+cache-tax, by karanb192
+https://github.com/karanb192/cache-tax (MIT)
+  The warming loop in hooks/keep-warm/ follows this project's idea.

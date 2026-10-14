@@ -1,0 +1,21 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="24" height="24" fill="#1E1E1E"/>
+<g id="Frame 1">
+<rect width="1574" height="802" transform="translate(-830.246 -217)" fill="white"/>
+<g id="Frame 2">
+<g id="warm">
+<g id="keep-warm 1">
+<path id="Vector" d="M10.5 2C11.2 6.5 6.00002 8.3 4.80002 12.4C3.40002 17.2 6.80002 21.5 12 21.5C17.2 21.5 20.3 18 19.3 13.5C18.8 11.2 17.3 9.2 15.7 7.8C16 10.1 15.2 11.1 14.2 11.4C15.1 7.4 13.3 4.1 10.5 2Z" fill="url(#paint0_linear_0_1)" stroke="#174E9C" stroke-width="0.8"/>
+<path id="Vector_2" d="M12 12.2C11.6 14.8 8.90002 15.7 8.90002 17.7C8.90002 19.3 10.2 20.1 12 20.1C13.8 20.1 15.1 19.1 15.1 17.6C15.1 15.6 13.1 14 12 12.2Z" fill="#A6E8FF"/>
+</g>
+</g>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_1" x1="5.00002" y1="4" x2="19" y2="20" gradientUnits="userSpaceOnUse">
+<stop stop-color="#A6E8FF"/>
+<stop offset="0.45" stop-color="#4DA6FF"/>
+<stop offset="1" stop-color="#2563D9"/>
+</linearGradient>
+</defs>
+</svg>

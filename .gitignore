@@ -1,0 +1,6 @@
+.claude-plugin/types/
+__pycache__/
+*.bak*
+tests/plan-progress/register.mjs
+tests/plan-progress/strip.mjs
+tests/plan-progress/strip-icons.mjs

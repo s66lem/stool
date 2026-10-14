@@ -1,0 +1,182 @@
+[
+  {
+    "id": "T01",
+    "observed": "A:done B:done C:active",
+    "holds": true
+  },
+  {
+    "id": "T02",
+    "observed": "1 bar; A:done B:active D:pending C:pending; t: 1/4, running, active \"B\"",
+    "holds": true
+  },
+  {
+    "id": "T03",
+    "observed": "67% → 50%; A:done B:done C:active D:pending",
+    "holds": true
+  },
+  {
+    "id": "T04",
+    "observed": "C:active A:done B2:pending; title \"Task\"",
+    "holds": true
+  },
+  {
+    "id": "T05",
+    "observed": "A:done B:done C:active D:pending",
+    "holds": false
+  },
+  {
+    "id": "T06",
+    "observed": "SKILL: steps:[{title}]; schema required: title",
+    "holds": false
+  },
+  {
+    "id": "T07",
+    "observed": "A:active B:pending; t: 0/2, running, active \"A\"",
+    "holds": false
+  },
+  {
+    "id": "T08",
+    "observed": " → ",
+    "holds": false
+  },
+  {
+    "id": "T09",
+    "observed": "plan",
+    "holds": false
+  },
+  {
+    "id": "T10",
+    "observed": "",
+    "holds": true
+  },
+  {
+    "id": "T11",
+    "observed": "A:done B:pending C:active",
+    "holds": true
+  },
+  {
+    "id": "T12",
+    "observed": "result \"t: 1/3, running, active \"B\"\"; seen \"Task: Second, step 1 of 2, 33%\"",
+    "holds": false
+  },
+  {
+    "id": "T13",
+    "observed": "API:active Tests:done UI:pending Tests:pending",
+    "holds": true
+  },
+  {
+    "id": "T14",
+    "observed": "deny=plan_progress: \"t\" has no step \"Nonexistent\". Its steps: A, B, C; \"plan_progress: \"t\" has no step \"Nonexistent\". Its steps: A, B, C\"; changed=false",
+    "holds": false
+  },
+  {
+    "id": "T15",
+    "observed": "A:done B:done C:active",
+    "holds": false
+  },
+  {
+    "id": "T16",
+    "observed": "strip before true, after next true; agents field [{\"id\":\"ag1\",\"title\":\"Scan tests\",\"state\":\"running\",\"tool\":\"Starting\",\"model\":\"claude-haiku-4-5-20251001\",\"startedAt\":1000000,\"endedAt\":null,\"depth\":0,\"n\":1}]",
+    "holds": false
+  },
+  {
+    "id": "T17",
+    "observed": "ag1 back true, ag2 shown true",
+    "holds": false
+  },
+  {
+    "id": "T18",
+    "observed": "error/boom → running/null; A:error B:pending C:pending",
+    "holds": true
+  },
+  {
+    "id": "T19",
+    "observed": "A:done B:done C:active",
+    "holds": false
+  },
+  {
+    "id": "T20",
+    "observed": "x, y",
+    "holds": true
+  },
+  {
+    "id": "T21",
+    "observed": "running; A:active B:pending C:pending",
+    "holds": false
+  },
+  {
+    "id": "T22",
+    "observed": "done Task: done, 3 steps in 0s → running Task: One, step 1 of 2, 0%",
+    "holds": true
+  },
+  {
+    "id": "T23",
+    "observed": "reminder on call #0",
+    "holds": false
+  },
+  {
+    "id": "T24",
+    "observed": "no reminder in 10 edits with a no-op update in the middle",
+    "holds": true
+  },
+  {
+    "id": "T25",
+    "observed": "4th call (read-only Bash): ran; core ran 4 calls",
+    "holds": false
+  },
+  {
+    "id": "T26",
+    "observed": "startedAt 1000000 → 1000000",
+    "holds": false
+  },
+  {
+    "id": "T27",
+    "observed": "substep x: pending; drawn anywhere: false",
+    "holds": true
+  },
+  {
+    "id": "T28",
+    "observed": "fix-login…(Other), aaaaaaaaaaaa…(Q)",
+    "holds": true
+  },
+  {
+    "id": "T29",
+    "observed": "running",
+    "holds": true
+  },
+  {
+    "id": "T30",
+    "observed": "0 bars",
+    "holds": true
+  },
+  {
+    "id": "T31",
+    "observed": "0 bars",
+    "holds": true
+  },
+  {
+    "id": "T32",
+    "observed": "A:active B:done C:done; after turn: running; next once more: A:done B:done C:done",
+    "holds": false
+  },
+  {
+    "id": "N1_exitplan_id_unknown_to_model",
+    "observed": "bar \"plan\" made; model got context: [\"plan-progress: bar \\\"plan\\\" shows this plan; move it with {id:\\\"plan\\\", next:true} as steps finish.\"]",
+    "holds": false
+  },
+  {
+    "id": "N2_orphan_bar_blocks_stop",
+    "observed": "plan-progress: plan, login still open. Update each with mcp__stool__plan_progress: {id, next:true}, or state \"done\", \"needs_input\" or \"error\" with a note.",
+    "holds": false
+  },
+  {
+    "id": "N3_agents_skip_waiting_bar",
+    "observed": "t[] agents:auto[Look around]",
+    "holds": true
+  },
+  {
+    "id": "N4_stop_after_last_next",
+    "observed": "state done; stop passes; sounds sounds/done.wav",
+    "holds": true
+  }
+]

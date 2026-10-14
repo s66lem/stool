@@ -1,0 +1,171 @@
+{
+  "name": "stool",
+  "version": "2.0.2",
+  "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
+  "license": "MIT",
+  "author": { "name": "s66lem" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "projectRoots": {
+      "type": "string",
+      "multiple": true,
+      "title": "Project folders",
+      "description": "Folders (with their subfolders) where the folder-scoped parts run: keep-warm, agent-meter, and the opt-in guards. Empty = every folder",
+      "default": []
+    },
+    "doneBarSeconds": {
+      "type": "number",
+      "title": "Finished bar stays (seconds)",
+      "description": "Seconds a finished progress bar stays above the prompt while auto-close (/plan-progress-autoclose) is on",
+      "default": 30,
+      "min": 1
+    },
+    "twinkle": {
+      "type": "boolean",
+      "title": "Twinkle the terminal bar",
+      "description": "Animate the dots of the terminal progress bar while Claude works. Off, they are drawn still",
+      "default": true
+    },
+    "keepWarm": {
+      "type": "boolean",
+      "title": "Keep-warm",
+      "description": "Ping a big idle session every 50 minutes so its prompt cache stays warm (/keepwarm off|on|<count> per session)",
+      "default": true
+    },
+    "slotFile": {
+      "type": "string",
+      "title": "Agent slot file",
+      "description": "File shared by every session that counts the running agents against the agent cap (dispatch guard writes it, the usage strip reads it). ~ is your home folder",
+      "default": "~/.claude/stool/agent-slots.json"
+    },
+    "agentLedger": {
+      "type": "string",
+      "title": "Agent ledger file",
+      "description": "Tab-separated file with one line per finished subagent (calls, tokens, seconds, cap). ~ is your home folder",
+      "default": "~/.claude/stool/agent-ledger.tsv"
+    },
+    "restartContextAt": {
+      "type": "number",
+      "title": "Restart due at context %",
+      "description": "The restart clock says a restart is due when the main conversation reaches this context percent",
+      "default": 65,
+      "min": 1
+    },
+    "leadGuard": {
+      "type": "boolean",
+      "title": "Lead guard",
+      "description": "Deny the main conversation known slips: git add -A, cd out of the project folder, shell writes to the doc paths below, check scripts piped to tail. Subagents are not guarded",
+      "default": false
+    },
+    "leadGuardDocPaths": {
+      "type": "string",
+      "title": "Lead guard: doc paths",
+      "description": "Regex source: shell writes (sed -i, redirects, node -e writes) to paths matching it are denied. Empty turns the rule off",
+      "default": "docs/|CLAUDE\\.md"
+    },
+    "leadGuardCheckScripts": {
+      "type": "string",
+      "title": "Lead guard: check scripts",
+      "description": "Regex source for scripts whose output must not be piped through tail/head without pipefail. Empty turns the rule off",
+      "default": "(check|merge)\\.mjs"
+    },
+    "leadGuardImageNudge": {
+      "type": "boolean",
+      "title": "Lead guard: image-read nudge",
+      "description": "Remind the main conversation to hand image checks to a cheaper subagent after its 3rd full-size image read",
+      "default": true
+    },
+    "dispatchGuard": {
+      "type": "boolean",
+      "title": "Dispatch guard",
+      "description": "Append standing orders to every Agent prompt, require a tool-call cap on prompts matching the cap pattern, and hold Sonnet/Opus-class agents to the agent cap across sessions",
+      "default": false
+    },
+    "dispatchOrders": {
+      "type": "string",
+      "title": "Dispatch guard: standing orders",
+      "description": "Lines (one per line, each starting with \"- \") appended to every Agent prompt, before a tool-call cap line",
+      "default": "- Edit only the files this prompt assigns to you.\n- Keep your report short."
+    },
+    "dispatchCapPattern": {
+      "type": "string",
+      "title": "Dispatch guard: cap pattern",
+      "description": "Regex source (case-insensitive). A prompt matching it must state a tool-call cap or the spawn is denied, and it also gets the extra orders below. Empty turns the rule off",
+      "default": ""
+    },
+    "dispatchCapOrders": {
+      "type": "string",
+      "title": "Dispatch guard: extra orders",
+      "description": "Lines appended to prompts that match the cap pattern",
+      "default": ""
+    },
+    "dispatchCheapAgents": {
+      "type": "string",
+      "multiple": true,
+      "title": "Dispatch guard: cheap agent types",
+      "description": "Subagent types not counted against the agent cap (any Haiku-model agent is never counted)",
+      "default": []
+    },
+    "captureGuard": {
+      "type": "boolean",
+      "title": "Capture guard",
+      "description": "Stop a subagent (or the main conversation) after two slow capture-tool calls in a row, and show free RAM and app windows on the usage strip. Needs the two fields below",
+      "default": false
+    },
+    "captureTool": {
+      "type": "string",
+      "title": "Capture guard: tool name",
+      "description": "Full tool name to watch, e.g. mcp__server__screen_capture. Empty = no breaker",
+      "default": ""
+    },
+    "captureProcess": {
+      "type": "string",
+      "title": "Capture guard: process name",
+      "description": "Windows process name counted for the strip (no .exe). Empty = no strip value",
+      "default": ""
+    },
+    "restartPublishCounter": {
+      "type": "boolean",
+      "title": "Restart clock: publish counter",
+      "description": "Count commands matching the pattern below; the restart clock says a restart is due after the count below since the handoff file was last rewritten",
+      "default": false
+    },
+    "restartPublishPattern": {
+      "type": "string",
+      "title": "Restart clock: publish pattern",
+      "description": "Regex source for the commands to count (a deploy or publish script). Empty = counter off",
+      "default": ""
+    },
+    "restartPublishesAt": {
+      "type": "number",
+      "title": "Restart clock: publishes before a restart",
+      "description": "Count at which a restart is due",
+      "default": 3,
+      "min": 1
+    },
+    "restartHandoffLint": {
+      "type": "boolean",
+      "title": "Restart clock: handoff lint",
+      "description": "Warn when a write to the handoff file leaves two heading blocks or a stale \"YYYY-MM-DD HH:MMZ\" time",
+      "default": false
+    },
+    "restartHandoffFile": {
+      "type": "string",
+      "title": "Restart clock: handoff file name",
+      "description": "File name the lint and the counter reset watch",
+      "default": "HANDOFF.md"
+    },
+    "restartHandoffHeading": {
+      "type": "string",
+      "title": "Restart clock: handoff heading",
+      "description": "Text after \"## \" of the block that is rewritten on each restart",
+      "default": "RESUME HERE"
+    },
+    "restartRewriteCommand": {
+      "type": "string",
+      "title": "Restart clock: rewrite command",
+      "description": "Regex source for a shell command that rewrites the handoff block (resets the counter, like an Edit or Write of it). Empty = none",
+      "default": ""
+    }
+  }
+}
