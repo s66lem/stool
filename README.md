@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.0.2-4FC27A.svg)
+![Version](https://img.shields.io/badge/version-2.1.0-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -27,7 +27,7 @@
 - 🔥 **Keep-warm**: pings a big idle session so its one-hour prompt cache doesn't go cold while you're away.
 - 🔁 **Restart tools**: a clock that says when the context is due a restart, and a tool that clears and resumes the same session.
 - 🛡️ **Opt-in guards** for the main conversation, agent dispatch and slow capture tools, all pattern-driven, nothing tied to one project.
-- 🧰 **Workflow skills**: catch-up recaps, adversarial review, arenas, hill-climbing, autonomous runs, handoffs.
+- 🧰 **Workflow skills**: project setup (handoff, TODO, fix log), catch-up recaps, adversarial review, arenas, hill-climbing, autonomous runs, handoffs.
 
 It draws in the terminal too:
 
@@ -112,7 +112,11 @@ A subagent's shell commands also get `PLAN_PROGRESS_FILE` set to `~/.claude/stoo
 
 ## Skills
 
-Manual workflow skills, invoked as `stool:<name>`: `plan-progress` (reference for the bars), `ketchup` (read-only catch-up recap), `correct` (turn repeated mistakes into failing checks), `interrogate` (multi-model adversarial review of a diff), `arena` (N candidates, cross-judged), `autonomous-run` (drive to a checkable end state while you are away), `hillclimb` (tune one metric into a band, one change per measurement), `session-restart` (retrospective, handoff, then `restart_session`), `handoff` (write a continuation document).
+Manual workflow skills, invoked as `stool:<name>`: `plan-progress` (reference for the bars), `ketchup` (read-only catch-up recap), `correct` (turn repeated mistakes into failing checks), `interrogate` (multi-model adversarial review of a diff), `arena` (N candidates, cross-judged), `autonomous-run` (drive to a checkable end state while you are away), `hillclimb` (tune one metric into a band, one change per measurement), `session-restart` (retrospective, handoff, then `restart_session`), `handoff` (write a continuation document), `project-setup` (add `docs/HANDOFF.md` with one RESUME HERE block, `HANDOFF-history.md`, `TODO.md`, `FIXES.md` and a bookkeeping section in `CLAUDE.md` to any repo; never overwrites).
+
+### The session loop
+
+`/stool:project-setup` once per repo, then: work → the strip turns the context red (or the publish counter trips) → `/stool:session-restart` writes the retrospective and the handoff and clears into a fresh session that reads `RESUME HERE` and carries on. Long projects run for days this way without autocompact losing the thread.
 
 ## State and files
 
