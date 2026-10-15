@@ -1734,7 +1734,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'progress-agents', description: 'Fold or show the agent strips under the bars' })
     await $.command.register({ name: 'plan-progress-autoclose', description: 'Turn on or off finished bars leaving on their own' })
     await $.command.register({ name: 'plan-progress-settings', description: 'Open the progress bar settings' })
-    await $.command.register({ name: 'ribbon', description: 'Print what the usage strip sees (agent cap, weekly, 5hr, keep-warm, tokens); costs no tokens' })
+    await $.command.register({ name: 'ribbon', description: 'Print what the usage strip sees (agent cap, weekly, 5hr, keep-warm, tokens)' })
 
     return next(e)
   })
@@ -1803,14 +1803,15 @@ export const register: Register = (on, options) => {
     return { text: open ? 'Progress bars hidden.' : 'Progress bars shown.' }
   })
 
-  // `/ribbon`: the strip's numbers in words. Written with $.ui.log, which is drawn in the transcript and never sent to
-  // the model, and answered with no text, so it costs no tokens
+  // `/ribbon`: the strip's numbers in words, answered as the command's own text. `$.ui.log` rows and an empty answer
+  // showed nothing in the transcript (2026-10-15, stdout empty, also over Remote Control); a returned `text` is the
+  // command's output row on every surface. It lands in the transcript, so the model reads these five short lines on the
+  // next turn (about 70 tokens, once per use)
   on('command.run', { command: 'ribbon' }, async $ => {
     const [usage, warm] = [(await $.state.get(usageRef)).value, (await $.state.get(warmRef)).value]
     const at = await $.clock.now()
-    for (const line of ribbonLines(usage, warm, at, await stripExtra($, at))) $.ui.log(line)
 
-    return {}
+    return { text: ribbonLines(usage, warm, at, await stripExtra($, at)).join('\n') }
   })
 
   on('command.run', { command: 'progress-demo' }, async $ => {

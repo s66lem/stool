@@ -28,3 +28,12 @@ test('opt-in parts are off by default: nothing is denied', async ($, on) => {
   await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
   expect((await $.tool.call({ tool: 'Bash', command: 'git add -A' })).deny).toBeUndefined()
 })
+
+test('/ribbon answers its five lines as the command text, also with no usage state yet', async ($, on) => {
+  mock.clock(on, { now: 10 * 3600_000 })
+  on('state.get', () => ({ value: { value: undefined, version: 0 } }) as never)
+  on('fs.read', () => { throw new Error('no slot file') })
+  on('env.get', () => ({ value: undefined }) as never)
+  const { text } = await $.command.run({ command: 'ribbon' })
+  expect(text?.split('\n')).toEqual(['🔴 —', '🟠 —', '🟢 —', '🔵 —', '🟣 —'])
+})
