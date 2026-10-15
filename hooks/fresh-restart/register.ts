@@ -4,6 +4,8 @@ const TOOL = 'mcp__stool__restart_session'
 
 // The prompt waiting for the turn to end; module state is fine, /clear doesn't reload the module.
 let pending: string | undefined
+// optional model for /model, run after the clear and before the prompt
+let model: string | undefined
 // reload_plugins was called: /reload-plugins --force runs when the turn ends (the command cannot be
 // typed over Remote Control, and Claude cannot drive its own window)
 const RELOAD = 'mcp__stool__reload_plugins'
@@ -14,11 +16,14 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'restart_session',
       description:
-        'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this.',
+        'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this. `model` is optional; switches this session to that model before the resume prompt.',
       inputSchema: {
         type: 'object',
         required: ['prompt'],
-        properties: { prompt: { type: 'string', description: 'Self-contained resume prompt for the fresh context' } },
+        properties: {
+          prompt: { type: 'string', description: 'Self-contained resume prompt for the fresh context' },
+          model: { type: 'string', description: 'Optional; model alias or id ("sonnet", "opus", "claude-sonnet-5-5") to switch to before the prompt' },
+        },
       },
       isDeferred: false,
     })
@@ -41,7 +46,16 @@ export const register: Register = on => {
     const prompt = (e as unknown as { prompt?: unknown }).prompt
     if (typeof prompt !== 'string' || !prompt.trim()) return { deny: 'restart_session: prompt is required.' }
     pending = prompt
-    return { result: 'Restart queued: /clear and the resume prompt run when this turn ends. End the turn now.' }
+    const m = (e as unknown as { model?: unknown }).model
+    model = undefined
+    let note = ''
+    if (typeof m === 'string' && m.trim()) {
+      if (/^[\w.[\]-]+$/.test(m.trim())) {
+        model = m.trim()
+        note = ` The model switches to ${model} before the prompt.`
+      } else note = ' The model was not changed (unrecognised model name).'
+    }
+    return { result: `Restart queued: /clear and the resume prompt run when this turn ends.${note} End the turn now.` }
   })
 
   on('turn.complete', { reason: /[^]*|a{7}/ }, async ($, e, next) => {
@@ -58,10 +72,16 @@ export const register: Register = on => {
     if (pending === undefined) return done
     const text = pending
     pending = undefined
+    const m = model
+    model = undefined
     // outside the turn's hooks: command.run and prompt.submit refuse to run inside a hook the turn waits on
     $.clock.after(1000, () => {
       void $.command
         .run({ command: 'clear' })
+        .then(async () => {
+          // an unknown model must not block the restart; /model answers with text or throws
+          if (m) await $.command.run({ command: 'model', args: m }).catch(err => $.ui.toast(`model not changed: ${String(err)}`))
+        })
         .then(() => $.prompt.submit({ text, asUser: true }))
         .catch(err => $.ui.toast(`fresh-restart failed: ${String(err)}`))
     })

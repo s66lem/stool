@@ -24,6 +24,7 @@ A long session's handoff misses things the lead no longer has in view. When the 
 The restart reuses this session: `mcp__stool__restart_session` clears it and injects the resume prompt when the turn ends, so it stays a normal interactive session with its permission mode and Remote Control.
 - Call `mcp__stool__restart_session` with a self-contained `prompt`:
   "In <absolute repo path>: read CLAUDE.md and the handoff file, then continue with the first task in RESUME HERE."
+- Pass `model` (e.g. "sonnet", "opus", or a full id) only when the next phase should run on a different, usually cheaper, model; it switches the session after the clear and before the prompt.
 - Tell the user in one line that the restart is queued, then end the turn. When the turn ends the plugin runs `/clear` and submits the prompt as the next user message.
 - Not these: a scheduled task (starts an unattended session in ask mode with Remote Control off), a cron job paired with a clear (the cron dies with the cleared context), computer use (it cannot control the Claude app).
 - If the tool is missing (plugin not loaded), give the user the resume prompt and ask them to start a new session with it.

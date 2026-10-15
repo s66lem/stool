@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },

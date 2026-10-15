@@ -7,8 +7,8 @@
 <sub>(Salem's TOOLs)</sub>
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.1.2-4FC27A.svg)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.2.075-D97757.svg)](https://claude.com/claude-code)
+![Version](https://img.shields.io/badge/version-2.2.0-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -42,7 +42,7 @@ The generic parts are on as soon as you install it. The guards that carry projec
 /plugin install stool --marketplace s66lem/stool
 ```
 
-Answer `y` to add the marketplace, pick a scope, then set the options (every one has a default). Needs Claude Code 2.1.275 or later. The options live in `/config` under the plugin's name and can also be edited in `settings.json` under `pluginConfigs`.
+Answer `y` to add the marketplace, pick a scope, then set the options (every one has a default). Needs Claude Code 2.2.075 or later. The options live in `/config` under the plugin's name and can also be edited in `settings.json` under `pluginConfigs`.
 
 ## Parts
 
@@ -104,7 +104,7 @@ The progress bars' settings window (`/plan-progress-settings`) has a switch for 
 | --- | --- |
 | `mcp__stool__plan_progress` | Create and move a progress bar. |
 | `mcp__stool__agent_cap` | How many Sonnet/Opus-class agents to run in parallel right now, from the pace of the 5-hour and weekly windows. |
-| `mcp__stool__restart_session` | `/clear` this session and submit a resume prompt when the turn ends. |
+| `mcp__stool__restart_session` | `/clear` this session and submit a resume prompt when the turn ends; optional `model` (alias or id) runs `/model` after the clear, before the prompt. |
 | `mcp__stool__reload_plugins` | Run `/reload-plugins --force` when the turn ends. |
 | `mcp__stool__keep_warm` | Turn keep-warm off or on for this session (only registered inside `projectRoots`). |
 
