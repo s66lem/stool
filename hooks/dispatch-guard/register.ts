@@ -41,9 +41,17 @@ async function load($: EngineInterface, file: string) {
   return $.fs.read(expand(file.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, file)).then(SLOTS, () => [] as Slot[])
 }
 
+// one slot per agent: a resume of an agent still listed keeps its one slot
+async function addSlot($: EngineInterface, file: string, id: string, now: number) {
+  const slots = live(await load($, file), now).filter(s => s.id !== id)
+  await $.fs.write(expand(file.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, file), JSON.stringify([...slots, { id, at: now }]))
+}
+
 export const register: Register = (on, options) => {
   if (!flag(options, 'dispatchGuard')) return
   const slotFile = text(options, 'slotFile', SLOT_DEFAULT)
+  // whether each agent spawned here counts against the cap, for SendMessage resumes
+  const wasCounted = new Map<string, boolean>()
   const cheap = (Array.isArray(options?.dispatchCheapAgents) ? (options.dispatchCheapAgents as string[]) : [])
   const o: Orders = {
     text: text(options, 'dispatchOrders'),
@@ -73,8 +81,20 @@ export const register: Register = (on, options) => {
     }
 
     const r = await next(e.prompt.includes(MARK) ? e : { ...e, prompt: e.prompt + orders(e.prompt, o) })
-    if (counted && r.agentId)
-      await $.fs.write(expand(slotFile.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, slotFile), JSON.stringify([...live(await load($, slotFile), now), { id: r.agentId, at: now }]))
+    if (r.agentId) wasCounted.set(r.agentId, counted)
+    if (counted && r.agentId) await addSlot($, slotFile, r.agentId, now)
+    return r
+  })
+
+  // SendMessage to a finished background agent resumes it with no agent.spawn: its slot comes back here, or a
+  // resumed Sonnet/Opus agent runs uncounted. The turn.complete below frees it again.
+  on('tool.call', { tool: 'SendMessage' }, async ($, e, next) => {
+    const r = await next(e)
+    const id = (r.result as { resumedAgentId?: unknown } | undefined)?.resumedAgentId
+    if (typeof id !== 'string' || !inScope(await $.session.cwd(), roots(options))) return r
+    // ponytail: after a plugin reload the spawn's model is forgotten, so only the agent type says cheap
+    const type = (await $.agent.list()).find(a => a.id === id)?.type ?? ''
+    if (wasCounted.get(id) ?? !isCheap({ subagentType: type }, cheap)) await addSlot($, slotFile, id, await $.clock.now())
     return r
   })
 

@@ -96,3 +96,23 @@ test('no cap reading means no cap check', OPT, async ($, on) => {
   world(on)
   for (let i = 0; i < 4; i++) expect((await spawn($)).deny).toBeUndefined()
 })
+
+test('a SendMessage resume takes a slot again; a cheap one does not', OPT, async ($, on) => {
+  const w = world(on, { cap: 4 })
+  on('tool.call', { tool: 'SendMessage' } as never, (_$, e: any) => ({ result: { success: true, resumedAgentId: e.to } }) as never)
+  on('agent.list', () => ({ value: [] }) as never)
+  const done = (id: string) => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer', agentId: id })
+  const resume = (to: string) => $.tool.call({ tool: 'SendMessage', to, message: 'more' } as never)
+  await spawn($)
+  await spawn($, { model: 'haiku' })
+  await done('a1')
+  await done('a2')
+  expect(JSON.parse(w.file!).length).toBe(0)
+  await resume('a1')
+  await resume('a2')
+  expect(JSON.parse(w.file!).map((s: { id: string }) => s.id)).toEqual(['a1'])
+  await resume('a1') // a message to a running agent adds no second slot
+  expect(JSON.parse(w.file!).length).toBe(1)
+  await done('a1')
+  expect(JSON.parse(w.file!).length).toBe(0)
+})
