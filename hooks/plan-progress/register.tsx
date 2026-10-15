@@ -6,7 +6,7 @@ import type { AgentRun, Plan, PlanStage, PlanState, PlanStep, StepStatus } from 
 
 import { ribbonLines, stripCells, stripSvg as usageSvg, stripText as usageText, stripZones } from './strip'
 import type { TermCell } from './strip'
-import type { Zone } from './strip'
+import type { StripShow, Zone } from './strip'
 
 const TOOL = 'mcp__stool__plan_progress'
 const plans = atom({ plugin: 'stool', key: 'plans' } as const, [])
@@ -35,8 +35,20 @@ async function liveSlots($: EngineInterface, now: number): Promise<{ used: numbe
   }
 }
 // the strip's inputs beyond usage-pace and keep-warm
+// the `strip*` options (default on): which groups and details of the usage strip are drawn
+const STRIP_OPTIONS: [keyof StripShow, string, string, string][] = [
+  ['agents', 'stripAgents', 'Agents', 'running / cap'],
+  ['weekly', 'stripWeekly', 'Weekly usage', 'percent used, time to reset'],
+  ['five', 'stripFive', '5-hour usage', 'percent used, time to reset'],
+  ['warm', 'stripWarm', 'Keep-warm', 'cache pings, or cold'],
+  ['context', 'stripContext', 'Context', 'percent of the window used'],
+  ['cheap', 'stripCheap', 'Cheap agents', 'the 1 in 1+2/4'],
+  ['projection', 'stripProjection', 'Projection', 'where a window is heading, and when it runs out'],
+  ['reset', 'stripReset', 'Time to reset', 'the | 2d3h after a percent'],
+]
+let stripShow: StripShow = {}
 async function stripExtra($: EngineInterface, now: number) {
-  return { ...(await liveSlots($, now)), restart: (await $.state.get(restartRef)).value }
+  return { ...(await liveSlots($, now)), restart: (await $.state.get(restartRef)).value, show: stripShow }
 }
 const STRIP_H = 16
 const STRIP_GAP = 2
@@ -1566,6 +1578,7 @@ async function openSettings($: EngineInterface) {
 }
 
 export const register: Register = (on, options) => {
+  stripShow = Object.fromEntries(STRIP_OPTIONS.map(([k, f]) => [k, options?.[f] !== false]))
   partsOn = Object.fromEntries(PARTS.map(([k]) => [k, flag(options, k)]))
   optionSet = Object.fromEntries(PARTS.flatMap(p => p[4]).map(f => [f, typeof options?.[f] === 'string' && options[f] !== '']))
   slotFile = typeof options?.slotFile === 'string' && options.slotFile ? options.slotFile : SLOT_DEFAULT
@@ -1945,8 +1958,8 @@ export const register: Register = (on, options) => {
     const cap = (await $.state.get(usageRef)).value?.cap
     const figure = slots ? `${slots.cheap > 0 ? `${slots.cheap}+` : ''}${slots.used}${cap === undefined ? '' : `/${cap}`}` : '–'
     const agentsNow = !slots
-      ? 'Agent counts appear once the dispatch guard is on.'
-      : `${slots.used} Sonnet or Opus counted${cap === undefined ? '' : ` of a cap of ${cap}`}${slots.cheap > 0 ? `; ${slots.cheap} cheap (Haiku) not counted` : ''}. Live, from every session on this machine.`
+      ? 'none counted yet'
+      : `${slots.used} counted${cap === undefined ? '' : ` of ${cap} allowed`}${slots.cheap > 0 ? `, ${slots.cheap} cheap` : ''}`
     const part = (g: string) =>
       PARTS.filter(p => p[3] === g).map(([k, title, about, , needs]) => {
         const missing = needs.filter(f => !optionSet[f])
@@ -1956,13 +1969,12 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box key="card-Right now" flexDirection="column" backgroundColor="#2A2927" paddingX={1} paddingY={1}>
-          <Text bold>Right now</Text>
+          <Text bold>Agents running</Text>
           <Box flexDirection="row" gap={1} alignItems="center">
             <Text bold color="#FF9FA0">{figure}</Text>
-            <Box flexShrink={1}>
-              <Text dimColor>{agentsNow}</Text>
-            </Box>
+            <Text>{agentsNow}</Text>
           </Box>
+          <Text dimColor>{slots ? 'Across every session on this machine. Haiku and cheap agents do not count against the cap.' : 'Switch the dispatch guard on to count agents across sessions.'}</Text>
         </Box>
         {card(
           'Progress bars',
@@ -1979,6 +1991,19 @@ export const register: Register = (on, options) => {
             </Box>,
           ),
           row('twinkle', 'Twinkle', 'The dots of the terminal bar twinkle while Claude works; off, they sit still.', sw('twinkle', isTwinkling, () => setOption($, 'twinkle', !isTwinkling))),
+        )}
+        {card(
+          'Usage strip',
+          'what the strip above the bars shows',
+          ...STRIP_OPTIONS.map(([k, field, title, about]) => (
+            <Box key={`strip-${k}`} flexDirection="row" alignItems="center" gap={1} marginTop={1}>
+              <Box flexGrow={1} flexShrink={1} flexDirection="row" gap={1}>
+                <Text>{title}</Text>
+                <Text dimColor>{about}</Text>
+              </Box>
+              {sw(`strip-${k}-sw`, stripShow[k] !== false, () => setOption($, field, stripShow[k] === false))}
+            </Box>
+          )),
         )}
         {card(
           'Footer',

@@ -94,6 +94,13 @@ E3.files.set('C:/Users/t/.claude/stool/agent-slots.json', { text: JSON.stringify
 await E3.everyTick()
 assert.ok((await slotsText(E3)).includes('1+2/4'), 'cheap+counted/cap')
 
+// the strip's own options: a group or a detail left out when its flag is false
+const full = stripText(usage, warm, now, { used: 1 })
+assert.ok(full.includes('week') && full.includes('93% | 2d3h') && full.includes('147%'), 'everything on by default')
+const hidden = stripText(usage, warm, now, { used: 1, show: { weekly: false, reset: false, projection: false } })
+assert.ok(!hidden.includes('week') && !hidden.includes('2d3h') && !hidden.includes('147%') && hidden.includes('83%'), 'weekly off; no reset time or projection on the 5h group')
+assert.ok(!stripText(usage, warm, now, { used: 1, show: { agents: false } }).includes('agents'), 'agents off')
+
 const img = s => `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.source)}" width="${s.width}" height="${s.height}" style="display:block">`
 fs.writeFileSync('strip-look.html', `<!doctype html><html style="color-scheme:dark"><head><meta charset="utf-8"></head><body style="background:#141413;padding:40px"><div style="background:#1f1e1d;border-radius:12px;width:${withBar[0].width}px;overflow:hidden">${withBar.filter(s => !s.isInteractive).map(img).join('')}</div></body></html>`)
 console.log('strip: all passed')

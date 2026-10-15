@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -24,6 +24,54 @@
       "type": "boolean",
       "title": "Twinkle the terminal bar",
       "description": "Animate the dots of the terminal progress bar while Claude works. Off, they are drawn still",
+      "default": true
+    },
+    "stripAgents": {
+      "type": "boolean",
+      "title": "Strip: agents",
+      "description": "Show the running agents / agent cap group on the usage strip",
+      "default": true
+    },
+    "stripWeekly": {
+      "type": "boolean",
+      "title": "Strip: weekly usage",
+      "description": "Show the weekly usage group on the usage strip",
+      "default": true
+    },
+    "stripFive": {
+      "type": "boolean",
+      "title": "Strip: 5-hour usage",
+      "description": "Show the 5-hour usage group on the usage strip",
+      "default": true
+    },
+    "stripWarm": {
+      "type": "boolean",
+      "title": "Strip: keep-warm",
+      "description": "Show the keep-warm group (cache pings, or cold) on the usage strip",
+      "default": true
+    },
+    "stripContext": {
+      "type": "boolean",
+      "title": "Strip: context",
+      "description": "Show the context percent group on the usage strip",
+      "default": true
+    },
+    "stripCheap": {
+      "type": "boolean",
+      "title": "Strip: cheap agent count",
+      "description": "Show the cheap (Haiku) agents running in front of the count, as in 1+2/4",
+      "default": true
+    },
+    "stripProjection": {
+      "type": "boolean",
+      "title": "Strip: projection",
+      "description": "Show where each usage window is heading at its pace, and when it would run out",
+      "default": true
+    },
+    "stripReset": {
+      "type": "boolean",
+      "title": "Strip: time to reset",
+      "description": "Show the time left to each usage window's reset",
       "default": true
     },
     "keepWarm": {

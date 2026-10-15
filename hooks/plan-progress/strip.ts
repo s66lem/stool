@@ -47,13 +47,11 @@ const FONT = `'Anthropic Sans Text','Anthropic Sans',ui-sans-serif,system-ui,-ap
 const DASH = '#505050'
 
 /** One usage window's two halves: `93% | 2d3h` and, when it has a pace, `- 147% | 8hr`. */
-function windowSpans(w: UsageWindow, now: number, c: { main: string; bar: string; soft: string; softBar: string }): Span[] {
-  const out: Span[] = [
-    { text: `${Math.round(w.used)}% `, size: 15, fill: c.main, tip: '% Used' },
-    { text: '|', size: 16, fill: c.bar, tip: '|' },
-    { text: ` ${fmtSpan(w.resetAt - now)}`, size: 15, fill: c.main, tip: 'Reset Date' },
-  ]
-  if (w.projected === null) return out
+function windowSpans(w: UsageWindow, now: number, c: { main: string; bar: string; soft: string; softBar: string }, show: StripShow): Span[] {
+  const out: Span[] = [{ text: `${Math.round(w.used)}%`, size: 15, fill: c.main, tip: '% Used' }]
+  if (show.reset !== false)
+    out.push({ text: ' |', size: 16, fill: c.bar, tip: '|' }, { text: ` ${fmtSpan(w.resetAt - now)}`, size: 15, fill: c.main, tip: 'Reset Date' })
+  if (w.projected === null || show.projection === false) return out
   out.push({ text: '-', size: 16, fill: DASH, gap: 5, tip: '-' }, { text: `${Math.round(w.projected)}%`, size: 13, fill: c.soft, gap: 5, tip: '% Projected' })
   // the time it runs out is shown only when that is before the reset
   if (w.limitAt !== null && w.limitAt < w.resetAt)
@@ -62,12 +60,16 @@ function windowSpans(w: UsageWindow, now: number, c: { main: string; bar: string
 }
 
 /** What the strip reads besides usage-pace and keep-warm: live Sonnet/Opus agents across sessions, restart-clock. */
-export type Extra = { used?: number; cheap?: number; restart?: RestartStrip }
+/** What the strip shows: a group or a detail is drawn unless its flag is false (the `strip*` options). */
+export type StripShow = { agents?: boolean; cheap?: boolean; weekly?: boolean; five?: boolean; warm?: boolean; context?: boolean; reset?: boolean; projection?: boolean }
+export type Extra = { used?: number; cheap?: number; restart?: RestartStrip; show?: StripShow }
 
 function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, now: number, extra: Extra = {}): Group[] {
   const out: Group[] = []
   if (!usage) return out
+  const show = extra.show ?? {}
   // used / cap: the count, the slash and the cap each have their own red
+  if (show.agents !== false)
   out.push({
     icon: 'agent',
     iconGap: 6,
@@ -77,7 +79,7 @@ function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, 
         ? [{ text: String(usage.cap), size: 15, fill: '#E42626', tip: 'Agent Cap' }]
         : [
             // Haiku and cheap agents running, in front: "1+2/4" is one cheap, two counted, a cap of four
-            ...(extra.cheap
+            ...(extra.cheap && show.cheap !== false
               ? [
                   { text: String(extra.cheap), size: 15, fill: '#FFC9C9', tip: 'Cheap Agents Running' },
                   { text: '+', size: 15, fill: '#FE5D60', tip: '+' },
@@ -88,23 +90,23 @@ function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, 
             { text: String(usage.cap), size: 15, fill: '#E42626', tip: 'Agent Cap' },
           ],
   })
-  if (usage.weekly)
+  if (usage.weekly && show.weekly !== false)
     out.push({
       icon: 'weekly',
       iconGap: 7,
       mod: 'usage-pace',
-      spans: windowSpans(usage.weekly, now, { main: '#FA6A34', bar: '#982C19', soft: '#FEA75E', softBar: '#9D5E2A' }),
+      spans: windowSpans(usage.weekly, now, { main: '#FA6A34', bar: '#982C19', soft: '#FEA75E', softBar: '#9D5E2A' }, show),
     })
-  if (usage.five)
+  if (usage.five && show.five !== false)
     out.push({
       icon: 'five',
       iconGap: 10,
       mod: 'usage-pace',
-      spans: windowSpans(usage.five, now, { main: '#6EE092', bar: '#015E37', soft: '#B8EEC6', softBar: '#609F70' }),
+      spans: windowSpans(usage.five, now, { main: '#6EE092', bar: '#015E37', soft: '#B8EEC6', softBar: '#609F70' }, show),
     })
   // keep-warm: `9/10 | 12:40a` while its pings run, an ice cube and `cold` once an hour has passed since the last
   // request; nothing in between (the plain `warm` state was dropped)
-  if (warm && warm.coldAt !== null) {
+  if (warm && warm.coldAt !== null && show.warm !== false) {
     const isCold = now >= warm.coldAt
     if (isCold || warm.pings > 0)
       out.push({
@@ -125,7 +127,7 @@ function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, 
       })
   }
   // context % (was tokens this week), red once restart-clock says a restart is due; nothing before it has a reading
-  if (extra.restart && extra.restart.ctx !== null)
+  if (extra.restart && extra.restart.ctx !== null && show.context !== false)
     out.push({
       icon: 'tokens',
       iconGap: 10,
