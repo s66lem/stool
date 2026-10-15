@@ -49,7 +49,7 @@ Answer `y` to add the marketplace, pick a scope, then set the options (every one
 | Part | On by default | What it does |
 | --- | --- | --- |
 | Progress bars (`plan-progress`) | yes | The `plan_progress` tool: the model keeps a staged plan above the prompt, with per-agent strips, a stage pill, times on hover, sounds, and a settings window (the gear in the footer). The terminal bar is a braille track. |
-| Usage strip | yes | A strip above the bars: agents used / agent cap, weekly and 5-hour usage with the pace, keep-warm state, context percent, tokens per second. |
+| Usage strip | yes | A strip above the bars: running agents / agent cap (`1+2/4` is one cheap Haiku agent plus two counted Sonnet/Opus against a cap of four), weekly and 5-hour usage with the pace, keep-warm state, context percent, tokens per second. |
 | Usage pace (`usage-pace`) | yes | Computes the agent cap from the 5-hour and weekly windows, and toasts when the 5-hour limit would be hit early. Tool `agent_cap`. |
 | Keep-warm (`keep-warm`) | yes | Pings a big idle session every 50 minutes so its one-hour prompt cache stays warm, up to 15 pings in a row, only above 100k tokens of context and below 95% of any limit. Command `/keepwarm off\|on\|<count>`. |
 | Restart tools (`fresh-restart`) | yes | `restart_session` (`/clear` plus a resume prompt in the same session, once the turn ends) and `reload_plugins`. |
@@ -92,7 +92,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `restartHandoffHeading` | `RESUME HERE` | Heading text (after `## `) of the block rewritten on each restart. |
 | `restartRewriteCommand` | empty | Regex source for a shell command that rewrites the handoff block (resets the counter like an Edit or Write of it). |
 
-The progress bars' settings window (`/plan-progress-settings`) has a switch for each opt-in part; the patterns and paths are edited in `/config`.
+The settings window (`/plan-progress-settings`, or the gear in the footer) shows the running agents and has the bar, footer, agent and restart switches in grouped sections, with a note when a part still needs a `/config` value; the patterns and paths are edited in `/config`.
 
 ## Commands
 

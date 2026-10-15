@@ -89,6 +89,10 @@ assert.ok((await slotsText(E3)).includes('1/4'), 'used/cap reads the file, the s
 const t1 = E3.tickCount()
 await E3.everyTick()
 assert.equal(E3.tickCount(), t1, 'no change, no redraw')
+// cheap (Haiku) agents are listed in front: one cheap and two counted against the cap reads "1+2/4"
+E3.files.set('C:/Users/t/.claude/stool/agent-slots.json', { text: JSON.stringify([{ id: 'h', at: E3.now(), cheap: true }, { id: 'a', at: E3.now() }, { id: 'b', at: E3.now() }]), mtimeMs: E3.now() })
+await E3.everyTick()
+assert.ok((await slotsText(E3)).includes('1+2/4'), 'cheap+counted/cap')
 
 const img = s => `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.source)}" width="${s.width}" height="${s.height}" style="display:block">`
 fs.writeFileSync('strip-look.html', `<!doctype html><html style="color-scheme:dark"><head><meta charset="utf-8"></head><body style="background:#141413;padding:40px"><div style="background:#1f1e1d;border-radius:12px;width:${withBar[0].width}px;overflow:hidden">${withBar.filter(s => !s.isInteractive).map(img).join('')}</div></body></html>`)

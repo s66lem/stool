@@ -62,7 +62,11 @@ test('Sonnet/Opus are held to agent_cap across sessions; Haiku is exempt', OPT, 
   await spawn($, { model: 'haiku' })
   await spawn($, { subagentType: 'worker' })
   expect(w.prompts.length).toBe(4)
-  expect(JSON.parse(w.file!).length).toBe(2)
+  // the cheap ones are listed (the strip shows "2+2/2") but never count: a third Sonnet is still refused
+  const slots = JSON.parse(w.file!) as { cheap?: boolean }[]
+  expect(slots.filter(s => s.cheap).length).toBe(2)
+  expect(slots.filter(s => !s.cheap).length).toBe(2)
+  expect((await spawn($)).deny).toContain('agent_cap is 2')
 })
 
 test('a finished agent frees its slot; no cap reading skips the check', OPT, async ($, on) => {
@@ -110,9 +114,10 @@ test('a SendMessage resume takes a slot again; a cheap one does not', OPT, async
   expect(JSON.parse(w.file!).length).toBe(0)
   await resume('a1')
   await resume('a2')
-  expect(JSON.parse(w.file!).map((s: { id: string }) => s.id)).toEqual(['a1'])
+  expect(JSON.parse(w.file!)).toEqual([{ id: 'a1', at: NOW }, { id: 'a2', at: NOW, cheap: true }])
   await resume('a1') // a message to a running agent adds no second slot
-  expect(JSON.parse(w.file!).length).toBe(1)
+  expect(JSON.parse(w.file!).length).toBe(2)
   await done('a1')
+  await done('a2')
   expect(JSON.parse(w.file!).length).toBe(0)
 })

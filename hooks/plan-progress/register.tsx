@@ -23,17 +23,20 @@ const meterRef = { plugin: 'stool', key: 'meter' } as const
 // dispatch-guard's slot file (every session); its entries older than 3 h are crashed agents. `slotFile` option.
 let slotFile = SLOT_DEFAULT
 const SLOT_EXPIRE_MS = 3 * 3600_000
-async function liveSlots($: EngineInterface, now: number): Promise<number | undefined> {
+async function liveSlots($: EngineInterface, now: number): Promise<{ used: number; cheap: number } | undefined> {
   try {
     const v = JSON.parse(await $.fs.read(expand(slotFile.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, slotFile)))
-    return Array.isArray(v) ? v.filter(s => now - Number(s?.at) < SLOT_EXPIRE_MS).length : undefined
+    if (!Array.isArray(v)) return undefined
+    const l = v.filter(s => now - Number(s?.at) < SLOT_EXPIRE_MS)
+    const cheap = l.filter(s => s?.cheap === true).length
+    return { used: l.length - cheap, cheap }
   } catch {
     return undefined // no file or no dispatch-guard: the strip shows the cap alone
   }
 }
 // the strip's inputs beyond usage-pace and keep-warm
 async function stripExtra($: EngineInterface, now: number) {
-  return { used: await liveSlots($, now), restart: (await $.state.get(restartRef)).value }
+  return { ...(await liveSlots($, now)), restart: (await $.state.get(restartRef)).value }
 }
 const STRIP_H = 16
 const STRIP_GAP = 2
@@ -788,7 +791,7 @@ async function editPlan($: EngineInterface, id: string, make: (prev: Plan | null
 const agentHome = new Map<string, string>() // agentId -> bar id
 const toolUses = new Map<string, string>() // tool_use_id -> agentId, to find who waits on a permission
 const waiting = new Set<string>()
-let lastUsed: number | undefined // dispatch-guard slots seen at the last poll
+let lastUsed: string | undefined // dispatch-guard slots seen at the last poll
 let foldUntil = 0 // keep ticking until finished strips have folded
 
 // the mod's own bar mirrors its agents as steps, finished first, so percent and count read done/total
@@ -1495,15 +1498,17 @@ const STAYS = [10, 30, 60]
 let isAutoClose = false
 let isSpeedShown = true
 let doneStaysMs = 30_000
-// the opt-in parts (userConfig booleans, default off), switched from the settings window
-const PARTS: [string, string, string][] = [
-  ['leadGuard', 'Lead guard', 'Denies known slips of the main conversation: git add -A, cd out of the project, shell writes to docs.'],
-  ['dispatchGuard', 'Dispatch guard', 'Standing orders on every Agent prompt, a tool-call cap rule, and the agent_cap held across sessions.'],
-  ['captureGuard', 'Capture guard', 'Stops after two slow screen captures in a row (needs the capture tool name in /config).'],
-  ['restartHandoffLint', 'Handoff lint', 'Warns when a write to the handoff file leaves two headings or a stale time.'],
-  ['restartPublishCounter', 'Publish counter', 'Counts runs of a command (set its pattern in /config) and says when a restart is due.'],
+// the opt-in parts (userConfig booleans, default off), switched from the settings window: key, title, what it does,
+// the group it sits in, and the /config fields it needs filled before it does anything (noted while they are empty)
+const PARTS: [string, string, string, string, string[]][] = [
+  ['dispatchGuard', 'Dispatch guard', 'Adds your standing orders to every agent prompt and holds Sonnet and Opus agents to the agent cap across all sessions.', 'Agents', []],
+  ['leadGuard', 'Lead guard', 'Denies the main conversation known slips: git add -A, cd out of the project, shell writes to docs.', 'Agents', []],
+  ['captureGuard', 'Capture guard', 'Stops after two slow screen captures in a row and shows free RAM on the usage strip.', 'Agents', ['captureTool']],
+  ['restartHandoffLint', 'Handoff lint', 'Warns when a write to the handoff file leaves two headings or a stale time.', 'Restarts', []],
+  ['restartPublishCounter', 'Publish counter', 'Counts runs of a command and says when a restart is due.', 'Restarts', ['restartPublishPattern']],
 ]
 let partsOn: Record<string, boolean> = {}
+let optionSet: Record<string, boolean> = {} // option fields that hold a value, for the "needs" notes
 let aboutVersion = ''
 type Prefs = { autoclose: boolean; speedShown: boolean; rev: number }
 const prefs = atom({ plugin: 'stool', key: 'prefs' } as const, null as Prefs | null)
@@ -1557,11 +1562,12 @@ async function openSettings($: EngineInterface) {
       .read(`${$.plugin.root}/.claude-plugin/plugin.json`)
       .then(t => String(JSON.parse(t).version ?? ''))
       .catch(() => '')
-  return $.ui.open({ id: SETTINGS, title: 'Progress bars', focus: true, closeOnEscape: true, rows: 26 })
+  return $.ui.open({ id: SETTINGS, title: 'Stool settings', focus: true, closeOnEscape: true, rows: 34 })
 }
 
 export const register: Register = (on, options) => {
   partsOn = Object.fromEntries(PARTS.map(([k]) => [k, flag(options, k)]))
+  optionSet = Object.fromEntries(PARTS.flatMap(p => p[4]).map(f => [f, typeof options?.[f] === 'string' && options[f] !== '']))
   slotFile = typeof options?.slotFile === 'string' && options.slotFile ? options.slotFile : SLOT_DEFAULT
   const seconds = Number(options?.doneBarSeconds ?? 30)
   doneStaysMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 30_000
@@ -1716,7 +1722,8 @@ export const register: Register = (on, options) => {
       await reapStale($, list).catch(() => undefined)
       if (list !== lastSaved) await savePlans($, list)
       // another session's agent starting or ending changes the strip's used/cap, and nothing else redraws for it
-      const used = await liveSlots($, await $.clock.now())
+      const slots = await liveSlots($, await $.clock.now())
+      const used = slots ? `${slots.cheap}+${slots.used}` : undefined
       if (used !== lastUsed) {
         lastUsed = used
         await update($, tick, n => n + 1)
@@ -1897,11 +1904,12 @@ export const register: Register = (on, options) => {
     )
   })
 
-  // the settings window: Behavior, Effects, Speed, About. Every control is a Button (an open list or a half-typed field
-  // would not survive the desktop building the window anew at each redraw)
+  // the settings window: what is running now, then Progress bars, Footer, Agents, Restarts, About. Every control is a
+  // Button (an open list or a half-typed field would not survive the desktop building the window anew at each redraw)
   on('ui.render', { component: 'Pane', requestId: SETTINGS }, async ($, e) => {
     const s = await read($, speed)
     await read($, prefs)
+    await read($, tick)
     const { Box, Button, Text } = $.ui.resolve(e)
     const secs = Math.round(doneStaysMs / 1000)
     // /config takes any seconds: one the window has no cell for gets its own
@@ -1918,33 +1926,50 @@ export const register: Register = (on, options) => {
         {control}
       </Box>
     )
-    const head = (text: string, i: number) => (
-      <Box key={`head-${text}`} marginTop={i > 0 ? 1 : 0}>
+    const head = (text: string, about: string, i: number) => (
+      <Box key={`head-${text}`} flexDirection="column" marginTop={i > 0 ? 1 : 0}>
         <Text bold>{text}</Text>
+        <Text dimColor>{about}</Text>
       </Box>
     )
+    // the agent line: "1+2/4" is one cheap agent and two counted ones against a cap of four, as the usage strip draws it
+    const slots = await liveSlots($, await $.clock.now())
+    const cap = (await $.state.get(usageRef)).value?.cap
+    const capOf = cap === undefined ? '' : `/${cap}`
+    const agentsNow = !slots
+      ? 'Agent counts appear once the dispatch guard is on.'
+      : `${slots.cheap > 0 ? `${slots.cheap}+` : ''}${slots.used}${capOf}: ${slots.used} Sonnet or Opus counted${cap === undefined ? '' : ` of a cap of ${cap}`}${slots.cheap > 0 ? `, ${slots.cheap} cheap (Haiku) not counted` : ''}.`
+    const part = (g: string) =>
+      PARTS.filter(p => p[3] === g).map(([k, title, about, , needs]) => {
+        const missing = needs.filter(f => !optionSet[f])
+        const note = partsOn[k] === true && missing.length > 0 ? `${about} Needs ${missing.join(', ')} set in /config.` : about
+        return row(k, title, note, sw(k, partsOn[k] === true, () => setOption($, k, partsOn[k] !== true)))
+      })
     return (
       <Box flexDirection="column">
-        {head('Behavior', 0)}
-        {row('autoclose', 'Auto-close done bars', 'A finished bar leaves on its own (failed or waiting bars stay). Same as /plan-progress-autoclose.', sw(AUTOCLOSE, isAutoClose, () => setChoice($, AUTOCLOSE, !isAutoClose)))}
+        {head('Right now', 'Live, from every session on this machine.', 0)}
+        <Text>{agentsNow}</Text>
+        {head('Progress bars', 'The bars above the prompt.', 1)}
+        {row('autoclose', 'Auto-close finished bars', 'A finished bar leaves on its own; failed or waiting bars stay. Same as /plan-progress-autoclose.', sw(AUTOCLOSE, isAutoClose, () => setChoice($, AUTOCLOSE, !isAutoClose)))}
         {row(
           'stays',
-          'Finished bar stays',
-          'Seconds before a finished bar closes; waits for auto-close.',
+          'Seconds a finished bar stays',
+          isAutoClose ? 'How long before it closes.' : 'Used once auto-close is on.',
           <Box key="stays" flexDirection="row" flexShrink={0}>
             {stays.map(n => (
               <Button key={`stay-${n}`} dimColor={!isAutoClose && n !== secs} {...(n === secs ? { variant: 'primary' as const } : {})} label={`${n} s`} onPress={() => setOption($, 'doneBarSeconds', n)} />
             ))}
           </Box>,
         )}
-        {head('Effects', 1)}
-        {row('twinkle', 'Twinkle', 'The dots of the terminal bar twinkle while Claude works. Off, they are drawn still.', sw('twinkle', isTwinkling, () => setOption($, 'twinkle', !isTwinkling)))}
-        {head('Speed', 1)}
-        {row('speed', 'Show tokens per second', `The footer's ${speedLabel(s).replaceAll(FIGURE_SPACE, '')}: the main conversation's average over the last minute, subagents left out.`, sw(SPEED_SHOWN, isSpeedShown, () => setChoice($, SPEED_SHOWN, !isSpeedShown)))}
-        {head('Parts (off until switched on; patterns and paths are in /config)', 1)}
-        {PARTS.map(([k, title, about]) => row(k, title, about, sw(k, partsOn[k] === true, () => setOption($, k, partsOn[k] !== true))))}
-        {head('About', 1)}
-        <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT)`}</Text>
+        {row('twinkle', 'Twinkle', 'The dots of the terminal bar twinkle while Claude works; off, they sit still.', sw('twinkle', isTwinkling, () => setOption($, 'twinkle', !isTwinkling)))}
+        {head('Footer', 'Next to the Progress button.', 1)}
+        {row('speed', 'Tokens per second', `Shows the ${speedLabel(s).replaceAll(FIGURE_SPACE, '')} figure: the main conversation's average over the last minute, subagents left out.`, sw(SPEED_SHOWN, isSpeedShown, () => setChoice($, SPEED_SHOWN, !isSpeedShown)))}
+        {head('Agents', 'Off until switched on. Patterns and names are in /config.', 1)}
+        {part('Agents')}
+        {head('Restarts', 'Off until switched on.', 1)}
+        {part('Restarts')}
+        {head('About', '', 1)}
+        <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT) · a switch saves to your settings and the mod reloads in a moment`}</Text>
       </Box>
     )
   })

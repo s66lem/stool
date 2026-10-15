@@ -62,7 +62,7 @@ function windowSpans(w: UsageWindow, now: number, c: { main: string; bar: string
 }
 
 /** What the strip reads besides usage-pace and keep-warm: live Sonnet/Opus agents across sessions, restart-clock. */
-export type Extra = { used?: number; restart?: RestartStrip }
+export type Extra = { used?: number; cheap?: number; restart?: RestartStrip }
 
 function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, now: number, extra: Extra = {}): Group[] {
   const out: Group[] = []
@@ -76,6 +76,13 @@ function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, 
       extra.used === undefined
         ? [{ text: String(usage.cap), size: 15, fill: '#E42626', tip: 'Agent Cap' }]
         : [
+            // Haiku and cheap agents running, in front: "1+2/4" is one cheap, two counted, a cap of four
+            ...(extra.cheap
+              ? [
+                  { text: String(extra.cheap), size: 15, fill: '#FFC9C9', tip: 'Cheap Agents Running' },
+                  { text: '+', size: 15, fill: '#FE5D60', tip: '+' },
+                ]
+              : []),
             { text: String(extra.used), size: 15, fill: '#FF9FA0', tip: 'Agents Running' },
             { text: '/', size: 15, fill: '#FE5D60', tip: '/' },
             { text: String(usage.cap), size: 15, fill: '#E42626', tip: 'Agent Cap' },
