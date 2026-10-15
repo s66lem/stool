@@ -1914,11 +1914,15 @@ export const register: Register = (on, options) => {
     const secs = Math.round(doneStaysMs / 1000)
     // /config takes any seconds: one the window has no cell for gets its own
     const stays = STAYS.includes(secs) ? STAYS : [...STAYS, secs].sort((a, b) => a - b)
-    const sw = (key: string, isOn: boolean, press: () => unknown) => (
-      <Button key={key} dimColor={!isOn} {...(isOn ? { variant: 'primary' as const } : {})} label={isOn ? '━━● On ' : '●━━ Off'} onPress={press} />
-    )
+    // an On switch is the filled pill, an Off one sits back as plain dim text: the page reads by its pills
+    const sw = (key: string, isOn: boolean, press: () => unknown) =>
+      isOn ? (
+        <Button key={key} variant="primary" label="● On" onPress={press} />
+      ) : (
+        <Button key={key} plain dimColor label="○ Off" onPress={press} />
+      )
     const row = (key: string, title: string, about: string, control: unknown) => (
-      <Box key={`row-${key}`} flexDirection="row" alignItems="center" gap={1}>
+      <Box key={`row-${key}`} flexDirection="row" alignItems="center" gap={1} marginTop={1}>
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
           <Text>{title}</Text>
           <Text dimColor>{about}</Text>
@@ -1926,19 +1930,23 @@ export const register: Register = (on, options) => {
         {control}
       </Box>
     )
-    const head = (text: string, about: string, i: number) => (
-      <Box key={`head-${text}`} flexDirection="column" marginTop={i > 0 ? 1 : 0}>
-        <Text bold>{text}</Text>
-        <Text dimColor>{about}</Text>
+    // one card a section: a bold title with what it covers beside it, the rows under it
+    const card = (title: string, about: string, ...rows: unknown[]) => (
+      <Box key={`card-${title}`} flexDirection="column" backgroundColor="#2A2927" paddingX={1} paddingBottom={1} marginTop={1}>
+        <Box flexDirection="row" gap={1} marginTop={1}>
+          <Text bold>{title}</Text>
+          <Text dimColor>{about}</Text>
+        </Box>
+        {rows}
       </Box>
     )
-    // the agent line: "1+2/4" is one cheap agent and two counted ones against a cap of four, as the usage strip draws it
+    // "1+2/4" is one cheap agent and two counted ones against a cap of four, as the usage strip draws it
     const slots = await liveSlots($, await $.clock.now())
     const cap = (await $.state.get(usageRef)).value?.cap
-    const capOf = cap === undefined ? '' : `/${cap}`
+    const figure = slots ? `${slots.cheap > 0 ? `${slots.cheap}+` : ''}${slots.used}${cap === undefined ? '' : `/${cap}`}` : '–'
     const agentsNow = !slots
       ? 'Agent counts appear once the dispatch guard is on.'
-      : `${slots.cheap > 0 ? `${slots.cheap}+` : ''}${slots.used}${capOf}: ${slots.used} Sonnet or Opus counted${cap === undefined ? '' : ` of a cap of ${cap}`}${slots.cheap > 0 ? `, ${slots.cheap} cheap (Haiku) not counted` : ''}.`
+      : `${slots.used} Sonnet or Opus counted${cap === undefined ? '' : ` of a cap of ${cap}`}${slots.cheap > 0 ? `; ${slots.cheap} cheap (Haiku) not counted` : ''}. Live, from every session on this machine.`
     const part = (g: string) =>
       PARTS.filter(p => p[3] === g).map(([k, title, about, , needs]) => {
         const missing = needs.filter(f => !optionSet[f])
@@ -1947,29 +1955,43 @@ export const register: Register = (on, options) => {
       })
     return (
       <Box flexDirection="column">
-        {head('Right now', 'Live, from every session on this machine.', 0)}
-        <Text>{agentsNow}</Text>
-        {head('Progress bars', 'The bars above the prompt.', 1)}
-        {row('autoclose', 'Auto-close finished bars', 'A finished bar leaves on its own; failed or waiting bars stay. Same as /plan-progress-autoclose.', sw(AUTOCLOSE, isAutoClose, () => setChoice($, AUTOCLOSE, !isAutoClose)))}
-        {row(
-          'stays',
-          'Seconds a finished bar stays',
-          isAutoClose ? 'How long before it closes.' : 'Used once auto-close is on.',
-          <Box key="stays" flexDirection="row" flexShrink={0}>
-            {stays.map(n => (
-              <Button key={`stay-${n}`} dimColor={!isAutoClose && n !== secs} {...(n === secs ? { variant: 'primary' as const } : {})} label={`${n} s`} onPress={() => setOption($, 'doneBarSeconds', n)} />
-            ))}
-          </Box>,
+        <Box key="card-Right now" flexDirection="column" backgroundColor="#2A2927" paddingX={1} paddingY={1}>
+          <Text bold>Right now</Text>
+          <Box flexDirection="row" gap={1} alignItems="center">
+            <Text bold color="#FF9FA0">{figure}</Text>
+            <Box flexShrink={1}>
+              <Text dimColor>{agentsNow}</Text>
+            </Box>
+          </Box>
+        </Box>
+        {card(
+          'Progress bars',
+          'above the prompt',
+          row('autoclose', 'Auto-close finished bars', 'A finished bar leaves on its own; failed or waiting bars stay. Same as /plan-progress-autoclose.', sw(AUTOCLOSE, isAutoClose, () => setChoice($, AUTOCLOSE, !isAutoClose))),
+          row(
+            'stays',
+            'Seconds a finished bar stays',
+            isAutoClose ? 'How long before it closes.' : 'Used once auto-close is on.',
+            <Box key="stays" flexDirection="row" flexShrink={0}>
+              {stays.map(n => (
+                <Button key={`stay-${n}`} dimColor={n !== secs} {...(n === secs ? { variant: 'primary' as const } : { plain: true })} label={`${n} s`} onPress={() => setOption($, 'doneBarSeconds', n)} />
+              ))}
+            </Box>,
+          ),
+          row('twinkle', 'Twinkle', 'The dots of the terminal bar twinkle while Claude works; off, they sit still.', sw('twinkle', isTwinkling, () => setOption($, 'twinkle', !isTwinkling))),
         )}
-        {row('twinkle', 'Twinkle', 'The dots of the terminal bar twinkle while Claude works; off, they sit still.', sw('twinkle', isTwinkling, () => setOption($, 'twinkle', !isTwinkling)))}
-        {head('Footer', 'Next to the Progress button.', 1)}
-        {row('speed', 'Tokens per second', `Shows the ${speedLabel(s).replaceAll(FIGURE_SPACE, '')} figure: the main conversation's average over the last minute, subagents left out.`, sw(SPEED_SHOWN, isSpeedShown, () => setChoice($, SPEED_SHOWN, !isSpeedShown)))}
-        {head('Agents', 'Off until switched on. Patterns and names are in /config.', 1)}
-        {part('Agents')}
-        {head('Restarts', 'Off until switched on.', 1)}
-        {part('Restarts')}
-        {head('About', '', 1)}
-        <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT) · a switch saves to your settings and the mod reloads in a moment`}</Text>
+        {card(
+          'Footer',
+          'next to the Progress button',
+          row('speed', 'Tokens per second', `Shows the ${speedLabel(s).replaceAll(FIGURE_SPACE, '')} figure: the main conversation's average over the last minute, subagents left out.`, sw(SPEED_SHOWN, isSpeedShown, () => setChoice($, SPEED_SHOWN, !isSpeedShown))),
+        )}
+        {card('Agents', 'off until switched on; patterns and names are in /config', ...part('Agents'))}
+        {card('Restarts', 'off until switched on', ...part('Restarts'))}
+        <Box key="about" flexDirection="column" marginTop={1}>
+          <Text bold>About</Text>
+          <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT)`}</Text>
+          <Text dimColor>A switch saves to your settings and the mod reloads in a moment.</Text>
+        </Box>
       </Box>
     )
   })
