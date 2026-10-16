@@ -2,6 +2,7 @@ import { expect, mock, test, tier } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { capOf, row } from './register'
+import { HEADER_OLD, fmtTokens, fmtW, parse, rate, since, sum, units, withHeader } from './ledger'
 
 tier('user')
 
@@ -11,7 +12,7 @@ const IN = 'C:/Users/dev/work/app'
 
 function world(on: On, cwd = IN) {
   mock.clock(on, { now: 10 * 3600_000 })
-  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0 }
+  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0, pct: 10, store: {} as Record<string, unknown> }
   on('session.cwd', () => ({ value: cwd }))
   on('fs.read', () => {
     if (w.file === undefined) throw new Error('ENOENT')
@@ -22,6 +23,10 @@ function world(on: On, cwd = IN) {
   on('tool.call', () => ({ result: '' }) as never)
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('state.set', (_$, e: any) => { w.strip = e.value; return { value: undefined } as never })
+  on('session.id', () => ({ value: 's1' }) as never)
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1, percent: 0 }, rateLimits: [{ kind: 'seven_day', percentUsed: w.pct, resetsAt: '1970-01-08T00:00:00Z' }] } }) as never)
+  on('store.get', (_$, e: any) => ({ value: w.store[e.key] }) as never)
+  on('store.set', (_$, e: any) => { w.store[e.key] = e.value; return { value: undefined } as never })
   on('ui.toast', (_$, e: any) => { w.toasts.push(e.text); return { value: undefined } as never })
   return w
 }
@@ -55,4 +60,59 @@ test('outside the configured roots nothing is recorded', OPT, async ($, on) => {
   await $.agent.spawn({ prompt: 'x', description: 'd', subagentType: 'implementer' })
   await done($, 'a1')
   expect(w.file).toBe(undefined)
+})
+
+const MAIN = { options: { ...OPT.options, ledgerMainTurns: true } }
+const mainTurn = ($: any) =>
+  $.turn.complete({ answer: 'ok', durationMs: 5_000, isAborted: false, turnId: 't', reason: 'answer', usage: { model: 'claude-opus-5-5', input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4 } })
+
+test('ledger lines carry the token counts and session; the old header is upgraded; main turns when asked', MAIN, async ($, on) => {
+  const w = world(on)
+  w.file = `${HEADER_OLD}\nT0\tC\timplementer\tm\td\t1\t9\t1\t5\n`
+  await $.agent.spawn({ prompt: 'x', description: 'd', subagentType: 'implementer' })
+  await done($, 'a1')
+  const [head, old, line] = w.file!.split('\n')
+  expect(head.endsWith('\tagent\tinput\toutput\tcache_read\tcache_write\tsession')).toBe(true)
+  expect(old).toBe('T0\tC\timplementer\tm\td\t1\t9\t1\t5')
+  expect(line.endsWith('\ta1\t10\t5\t100\t1\ts1')).toBe(true)
+  await mainTurn($)
+  const main = w.file!.split('\n')[3]
+  expect(main).toContain('\tmain\tclaude-opus-5-5\t')
+  expect(main.endsWith('\t\t1\t2\t3\t4\ts1')).toBe(true)
+})
+
+test('main turns are not logged unless ledgerMainTurns is on', OPT, async ($, on) => {
+  const w = world(on)
+  await mainTurn($)
+  expect(w.file).toBe(undefined)
+})
+
+test('units weigh model and token kind; the rate is the meter climb over the units since the anchor', () => {
+  const rows = parse(
+    `${withHeader('')}1970-01-01T09:30:00.000Z\tC\tmain\tclaude-opus-5-5\t\t0\t0\t0\t\t\t1000000\t0\t0\t0\ts1\n` +
+      `1970-01-01T09:31:00.000Z\tC\timplementer\tclaude-sonnet-5-5\td\t1\t0\t1\t\ta1\t0\t100000\t0\t0\ts1\n`,
+  )
+  expect(units(rows[0])).toBe(5_000_000) // opus 5 x 1M input
+  expect(units(rows[1])).toBe(3 * 5 * 100_000) // sonnet 3 x 5 x output
+  const r = rate(rows, { at: 0, pct: 10 }, 15, 1e12)
+  expect(r.units).toBe(6_500_000)
+  expect(Math.abs((r.perM ?? 0) - 5 / 6.5) < 1e-9).toBe(true)
+  expect(r.hasLead).toBe(true)
+  expect(sum(rows, x => x.agent === 'a1').agents.runs).toBe(1)
+  expect(since('2h', 10 * 3600_000)).toBe(8 * 3600_000)
+  expect(fmtW(0.4)).toBe('0.40w%')
+  expect(fmtTokens(150_000)).toBe('150k')
+})
+
+test('usage_since sums the ledger and prices it at the calibrated rate', OPT, async ($, on) => {
+  const w = world(on)
+  w.pct = 15
+  w.store['usage-anchor:1970-01-08T00:00:00Z'] = { at: 9 * 3600_000, pct: 10 }
+  const rowAt = (type: string, agent: string, input: number) => `1970-01-01T09:30:00.000Z\tC\t${type}\tclaude-sonnet-5-5\td\t1\t${input}\t1\t\t${agent}\t${input}\t0\t0\t0\ts1`
+  w.file = `${HEADER_OLD}\n${rowAt('main', '', 1_000_000)}\n${rowAt('implementer', 'a1', 1_000_000)}\n`
+  const r = await $.tool.call({ tool: 'mcp__stool__usage_since', input: {} } as never)
+  const text = String((r as { result?: unknown }).result)
+  expect(text.split('\n')[0]).toBe('5.0w% (2.0m tokens)')
+  expect(text).toContain('agents: 1 runs, 1.0m tokens, 2.5w%')
+  expect(text).toContain('lead: 1 turns')
 })

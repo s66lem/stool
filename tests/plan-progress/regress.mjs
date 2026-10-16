@@ -353,7 +353,7 @@ const C = {
     // the footer figure turned off in the window: Progress alone on a surface without the gear is the bare Button
     await find(await E.render('Pane', { requestId: 'settings' }), 'speedShown').props.onPress()
     const bare = await E.render('SessionMode', { surface: 'terminal', viewport: { isFullscreen: false } })
-    const ok = E.opened[0]?.id === 'settings' && ['Agents running', 'Progress bars', 'Usage strip', 'Footer', 'Agents', 'Restarts', 'About'].every(h => pane.includes(h)) && !/Appearance|Language/.test(pane) && footer.includes('Progress') && footer.includes('⚙') && footer.includes('⚡') && bare.type === 'Button'
+    const ok = E.opened[0]?.id === 'settings' && ['Agents running', 'Progress bars', 'Usage strip', 'Footer', 'Agents', 'Usage ledger', 'Restarts', 'About'].every(h => pane.includes(h)) && !/Appearance|Language/.test(pane) && footer.includes('Progress') && footer.includes('⚙') && footer.includes('⚡') && bare.type === 'Button'
     return [`${E.opened[0]?.id} ${footer} bare=${bare?.type}`, ok]
   },
   async twinkle_and_seconds_set_through_config(E) {

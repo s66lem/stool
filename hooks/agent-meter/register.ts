@@ -1,12 +1,13 @@
 // agent-meter: per-agent tool-call count vs the cap its prompt states, and a ledger line per finished agent
 //. Spike: tool.call and turn.complete carry agentId; turn.complete carries
 // durationMs and usage (4 token counts); agent.spawn answers agentId. Live token counts need a turn.step stream hook: skipped.
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-import { expand, inScope, roots, text } from '../config'
+import { expand, flag, inScope, roots, text } from '../config'
+import { extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
+import type { Anchor } from './ledger'
 
 export const LEDGER = '~/.claude/stool/agent-ledger.tsv'
-const HEADER = 'time\tcwd\ttype\tmodel\tdescription\tcalls\ttokens\tseconds\tcap'
 
 // the first "N tool calls" in the prompt is the cap (dispatch-guard appends its default after it)
 export const capOf = (prompt: string): number | undefined => {
@@ -25,8 +26,26 @@ export const row = (m: Meter, o: { time: string; cwd: string; tokens: number; ms
 const STRIP = { plugin: 'stool', key: 'meter' } as const
 export const strip = () => ({ agents: [...meters].map(([id, m]) => ({ id, desc: m.description, calls: m.calls, cap: m.cap ?? null })) })
 
+const fileOf = async ($: EngineInterface, ledger: string) =>
+  expand(ledger.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, ledger)
+
+// the weekly meter as of the first ledger line of a weekly window: the rate's starting point, kept across sessions
+async function ensureAnchor($: EngineInterface, now: number) {
+  const week = (await $.session.usage()).rateLimits.find(l => l.kind === 'seven_day')
+  if (!week?.resetsAt) return undefined
+  const key = `usage-anchor:${week.resetsAt}`
+  let anchor = (await $.store.get(key)) as Anchor | undefined
+  if (!anchor) {
+    anchor = { at: now, pct: week.percentUsed }
+    await $.store.set(key, anchor)
+  }
+  return { anchor, pct: week.percentUsed, resetsAt: week.resetsAt }
+}
+
 export const register: Register = (on, options) => {
   const ledger = text(options, 'agentLedger', LEDGER)
+  // the main conversation's turns too (a ledger write each turn), so usage_since can split lead from agents
+  const mainTurns = flag(options, 'ledgerMainTurns')
   on('agent.spawn', { prompt: /[^]*|a{1}/ }, async ($, e, next) => {
     const r = await next(e)
     if (r.agentId && !e.workflow && inScope(await $.session.cwd(), roots(options)))
@@ -49,17 +68,74 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', { reason: /[^]*|a{3}/ }, async ($, e, next) => {
     const m = e.agentId ? meters.get(e.agentId) : undefined
-    if (m && e.agentId) {
-      meters.delete(e.agentId)
+    const isMain = !e.agentId && mainTurns && e.usage !== undefined && inScope(await $.session.cwd(), roots(options))
+    if ((m && e.agentId) || isMain) {
+      if (m && e.agentId) meters.delete(e.agentId)
       const u = e.usage
-      const tokens = u ? u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens : 0
-      const line = row(m, { time: new Date(await $.clock.now()).toISOString(), cwd: await $.session.cwd(), tokens, ms: e.durationMs })
-      // ponytail: read-modify-write, two sessions ending in the same instant can drop a line
-      const file = expand(ledger.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, ledger)
+      const t = { input: u?.input_tokens ?? 0, output: u?.output_tokens ?? 0, cacheRead: u?.cache_read_input_tokens ?? 0, cacheWrite: u?.cache_creation_input_tokens ?? 0 }
+      const meter = m ?? { type: 'main', model: (u as { model?: string } | undefined)?.model ?? '', description: '', calls: 0, warned: false }
+      const now = await $.clock.now()
+      await ensureAnchor($, now).catch(() => undefined)
+      const line = [
+        row(meter, { time: new Date(now).toISOString(), cwd: await $.session.cwd(), tokens: t.input + t.output + t.cacheRead + t.cacheWrite, ms: e.durationMs }),
+        extraCols(e.agentId ?? '', t, await $.session.id()),
+      ].join('\t')
+      // ponytail: read-modify-write, two sessions ending in the same instant can drop a line; main turns grow the file
+      // by a line a turn, so trim it by hand when it gets large
+      const file = await fileOf($, ledger)
       const old = await $.fs.read(file).catch(() => '')
-      await $.fs.write(file, (old || HEADER + '\n') + line + '\n')
-      await $.state.set(STRIP, strip())
+      await $.fs.write(file, withHeader(old) + line + '\n')
+      if (m) await $.state.set(STRIP, strip())
     }
     return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('session.start', { cwd: /[^]*|a{31}/ }, async ($, e, next) => {
+    await $.tool.register({
+      name: 'usage_since',
+      description:
+        'What the agents (and, when ledgerMainTurns is on, the main conversation) used since a time or by one agent: tokens and weekly-percent points, like "0.4w% (150k tokens)". Weekly points are an estimate at a rate calibrated from the weekly meter.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', description: 'How far back: 30m, 2h, 1d, or a date. Default 1h.' },
+          agent: { type: 'string', description: 'Only this agent id (a prefix is enough).' },
+          session: { type: 'string', description: 'Only this session id (a prefix is enough).' },
+        },
+      },
+      isDeferred: true,
+    })
+    return next(e)
+  })
+
+  on('tool.call', { tool: 'mcp__stool__usage_since' }, async ($, e) => {
+    const input = ((e as { input?: Record<string, unknown> }).input ?? {}) as { since?: string; agent?: string; session?: string }
+    const now = await $.clock.now()
+    const from = since(input.since ?? '1h', now)
+    if (from === undefined) return { result: `usage_since: cannot read "${input.since}" as a time (try 30m, 2h, 1d, or a date).` }
+    const rows = parse(await $.fs.read(await fileOf($, ledger)).catch(() => ''))
+    const pick = (r: { at: number; agent: string; session: string }) =>
+      r.at >= from && r.at <= now && (!input.agent || r.agent.startsWith(input.agent)) && (!input.session || r.session.startsWith(input.session))
+    const { lead, agents } = sum(rows, pick)
+    const week = await ensureAnchor($, now).catch(() => undefined)
+    const cal = week ? rate(rows, week.anchor, week.pct, now) : undefined
+    const w = (u: number) => (cal?.perM === undefined ? undefined : (u / 1e6) * cal.perM)
+    const part = (name: string, s: typeof lead) => {
+      const x = w(s.units)
+      return `${name}: ${s.runs} ${name === 'lead' ? 'turns' : 'runs'}, ${fmtTokens(s.tokens)} tokens${x === undefined ? '' : `, ${fmtW(x)}`}${s.unsplit ? `, ${s.unsplit} older lines without token splits not weighed` : ''}`
+    }
+    const totalW = w(lead.units + agents.units)
+    const tokens = lead.tokens + agents.tokens
+    const head = `${totalW === undefined ? '?w%' : fmtW(totalW)} (${fmtTokens(tokens)} tokens)`
+    const notes = [
+      cal === undefined
+        ? 'No weekly meter reading (not on a subscription?): tokens only.'
+        : cal.perM === undefined
+          ? `No rate yet: the weekly meter has not moved since the ledger started counting (${new Date(week!.anchor.at).toLocaleString()}). Weekly points follow once it does.`
+          : `Rate ${cal.perM.toFixed(4)} w% per million units, from ${cal.pts} points over ${fmtTokens(cal.units)} units since ${new Date(week!.anchor.at).toLocaleString()}; the meter moves in whole points, so that is ±1 point${cal.pts < 3 ? ' (few points yet: rough)' : ''}.`,
+      cal && !cal.hasLead ? 'No main-conversation turns logged since then (ledgerMainTurns is off): the rate counts agents only, so w% reads high.' : '',
+      'Counts sessions under projectRoots on this machine; others use the weekly meter too.',
+    ].filter(Boolean)
+    return { result: [head, part('lead', lead), part('agents', agents), ...notes].join('\n') }
   }).catch(($, e, next) => next(e))
 }
