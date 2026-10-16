@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -96,6 +96,19 @@
       "type": "boolean",
       "title": "Ledger: main turns",
       "description": "Also log the main conversation's turns to the agent ledger (a file write each turn), so the usage_since tool can split lead from agents and calibrate weekly percent",
+      "default": false
+    },
+    "ledgerCacheWriteMult": {
+      "type": "number",
+      "title": "Ledger: cache write price",
+      "description": "What a cache-write token costs against an input token when usage_since prices the ledger: 1.25 for 5-minute writes, 2 for 1-hour writes, 1.4 a blend (the turn's counts do not say which)",
+      "default": 1.4,
+      "min": 1
+    },
+    "usageLog": {
+      "type": "boolean",
+      "title": "Usage log",
+      "description": "Append the 5-hour and weekly meter readings to ~/.claude/stool/usage-log.jsonl each time one moves, for calibration and drift fits (a small file write a few times an hour)",
       "default": false
     },
     "restartContextAt": {

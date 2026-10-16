@@ -3,8 +3,8 @@
 // durationMs and usage (4 token counts); agent.spawn answers agentId. Live token counts need a turn.step stream hook: skipped.
 import type { EngineInterface, Register } from 'claude-code'
 
-import { expand, flag, inScope, roots, text } from '../config'
-import { extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
+import { expand, flag, inScope, num, roots, text } from '../config'
+import { WRITE_MULT, extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
 import type { Anchor } from './ledger'
 
 export const LEDGER = '~/.claude/stool/agent-ledger.tsv'
@@ -46,6 +46,7 @@ export const register: Register = (on, options) => {
   const ledger = text(options, 'agentLedger', LEDGER)
   // the main conversation's turns too (a ledger write each turn), so usage_since can split lead from agents
   const mainTurns = flag(options, 'ledgerMainTurns')
+  const writeMult = num(options, 'ledgerCacheWriteMult', WRITE_MULT)
   on('agent.spawn', { prompt: /[^]*|a{1}/ }, async ($, e, next) => {
     const r = await next(e)
     if (r.agentId && !e.workflow && inScope(await $.session.cwd(), roots(options)))
@@ -116,23 +117,23 @@ export const register: Register = (on, options) => {
     const rows = parse(await $.fs.read(await fileOf($, ledger)).catch(() => ''))
     const pick = (r: { at: number; agent: string; session: string }) =>
       r.at >= from && r.at <= now && (!input.agent || r.agent.startsWith(input.agent)) && (!input.session || r.session.startsWith(input.session))
-    const { lead, agents } = sum(rows, pick)
+    const { lead, agents } = sum(rows, pick, writeMult)
     const week = await ensureAnchor($, now).catch(() => undefined)
-    const cal = week ? rate(rows, week.anchor, week.pct, now) : undefined
-    const w = (u: number) => (cal?.perM === undefined ? undefined : (u / 1e6) * cal.perM)
+    const cal = week ? rate(rows, week.anchor, week.pct, now, writeMult) : undefined
+    const w = (usd: number) => (cal?.perUsd === undefined ? undefined : usd * cal.perUsd)
     const part = (name: string, s: typeof lead) => {
-      const x = w(s.units)
+      const x = w(s.usd)
       return `${name}: ${s.runs} ${name === 'lead' ? 'turns' : 'runs'}, ${fmtTokens(s.tokens)} tokens${x === undefined ? '' : `, ${fmtW(x)}`}${s.unsplit ? `, ${s.unsplit} older lines without token splits not weighed` : ''}`
     }
-    const totalW = w(lead.units + agents.units)
+    const totalW = w(lead.usd + agents.usd)
     const tokens = lead.tokens + agents.tokens
     const head = `${totalW === undefined ? '?w%' : fmtW(totalW)} (${fmtTokens(tokens)} tokens)`
     const notes = [
       cal === undefined
         ? 'No weekly meter reading (not on a subscription?): tokens only.'
-        : cal.perM === undefined
+        : cal.perUsd === undefined
           ? `No rate yet: the weekly meter has not moved since the ledger started counting (${new Date(week!.anchor.at).toLocaleString()}). Weekly points follow once it does.`
-          : `Rate ${cal.perM.toFixed(4)} w% per million units, from ${cal.pts} points over ${fmtTokens(cal.units)} units since ${new Date(week!.anchor.at).toLocaleString()}; the meter moves in whole points, so that is ±1 point${cal.pts < 3 ? ' (few points yet: rough)' : ''}.`,
+          : `Rate ${cal.perUsd.toFixed(3)} w% per $ (1 w% is about $${(1 / cal.perUsd).toFixed(1)}), from ${cal.pts} points over $${cal.usd.toFixed(2)} at list prices since ${new Date(week!.anchor.at).toLocaleString()}; the meter moves in whole points, so that is ±1 point${cal.pts < 3 ? ' (few points yet: rough)' : ''}.`,
       cal && !cal.hasLead ? 'No main-conversation turns logged since then (ledgerMainTurns is off): the rate counts agents only, so w% reads high.' : '',
       'Counts sessions under projectRoots on this machine; others use the weekly meter too.',
     ].filter(Boolean)

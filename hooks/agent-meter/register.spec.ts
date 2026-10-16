@@ -2,7 +2,7 @@ import { expect, mock, test, tier } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { capOf, row } from './register'
-import { HEADER_OLD, fmtTokens, fmtW, parse, rate, since, sum, units, withHeader } from './ledger'
+import { HEADER_OLD, dollars, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
 
 tier('user')
 
@@ -87,20 +87,25 @@ test('main turns are not logged unless ledgerMainTurns is on', OPT, async ($, on
   expect(w.file).toBe(undefined)
 })
 
-test('units weigh model and token kind; the rate is the meter climb over the units since the anchor', () => {
+test('rows are priced at list prices; the rate is the meter climb over the dollars since the anchor', () => {
   const rows = parse(
     `${withHeader('')}1970-01-01T09:30:00.000Z\tC\tmain\tclaude-opus-5-5\t\t0\t0\t0\t\t\t1000000\t0\t0\t0\ts1\n` +
       `1970-01-01T09:31:00.000Z\tC\timplementer\tclaude-sonnet-5-5\td\t1\t0\t1\t\ta1\t0\t100000\t0\t0\ts1\n`,
   )
-  expect(units(rows[0])).toBe(5_000_000) // opus 5 x 1M input
-  expect(units(rows[1])).toBe(3 * 5 * 100_000) // sonnet 3 x 5 x output
+  expect(dollars(rows[0])).toBe(4) // opus $4 per million input, 1M
+  expect(dollars(rows[1])).toBe(1) // sonnet $10 per million output, 100k
+  const write = { ...rows[1], output: 0, cacheWrite: 1_000_000, cacheRead: 1_000_000 }
+  expect(Math.abs(dollars(write, 1.4) - (2 * 1.4 + 0.2)) < 1e-9).toBe(true) // write at 1.4x input, read at $0.20
+  expect(dollars({ ...write, model: 'claude-fable-5-1', cacheWrite: 0 })).toBe(0.25)
   const r = rate(rows, { at: 0, pct: 10 }, 15, 1e12)
-  expect(r.units).toBe(6_500_000)
-  expect(Math.abs((r.perM ?? 0) - 5 / 6.5) < 1e-9).toBe(true)
+  expect(r.usd).toBe(5)
+  expect(r.perUsd).toBe(1)
   expect(r.hasLead).toBe(true)
   expect(sum(rows, x => x.agent === 'a1').agents.runs).toBe(1)
   expect(since('2h', 10 * 3600_000)).toBe(8 * 3600_000)
-  expect(fmtW(0.4)).toBe('0.40w%')
+  expect(fmtW(0.4)).toBe('0.4w%')
+  expect(fmtW(0.04)).toBe('0.04w%')
+  expect(fmtW(12.3)).toBe('12w%')
   expect(fmtTokens(150_000)).toBe('150k')
 })
 
@@ -112,7 +117,9 @@ test('usage_since sums the ledger and prices it at the calibrated rate', OPT, as
   w.file = `${HEADER_OLD}\n${rowAt('main', '', 1_000_000)}\n${rowAt('implementer', 'a1', 1_000_000)}\n`
   const r = await $.tool.call({ tool: 'mcp__stool__usage_since', input: {} } as never)
   const text = String((r as { result?: unknown }).result)
+  // two sonnet rows of 1M input at $2 each: $4 for 5 points
   expect(text.split('\n')[0]).toBe('5.0w% (2.0m tokens)')
   expect(text).toContain('agents: 1 runs, 1.0m tokens, 2.5w%')
+  expect(text).toContain('1 w% is about $0.8')
   expect(text).toContain('lead: 1 turns')
 })

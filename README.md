@@ -73,6 +73,8 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `stripCheap`, `stripProjection`, `stripReset` | true | How the strip draws them: the cheap-agent count in front (`1+2/4`), where each usage window is heading, and the time left to its reset. |
 | `slotFile` | `~/.claude/stool/agent-slots.json` | File shared by all sessions that counts running agents (written by the dispatch guard, read by the usage strip). |
 | `agentLedger` | `~/.claude/stool/agent-ledger.tsv` | Tab-separated ledger, one line per finished subagent (and per main turn when `ledgerMainTurns` is on). |
+| `ledgerCacheWriteMult` | 1.4 | What a cache-write token costs against an input token when `usage_since` prices the ledger (1.25 for 5-minute writes, 2 for 1-hour writes; a turn's counts do not say which). |
+| `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
 | `restartContextAt` | 65 | Context percent at which a restart is due. |
 | `leadGuard` | false | Turn on the lead guard. |
@@ -106,7 +108,7 @@ The settings window (`/plan-progress-settings`, or the gear in the footer) shows
 | Tool | What it does |
 | --- | --- |
 | `mcp__stool__plan_progress` | Create and move a progress bar. |
-| `mcp__stool__usage_since` | What the agents (and the main conversation, with `ledgerMainTurns`) used since a time, by agent or by session: `0.4w% (150k tokens)`. Units weigh Opus 5 : Sonnet 3 : Haiku 1 and cache read 0.1x, cache write 1.25x, output 5x input; weekly points use a rate from the weekly meter's climb over the units logged since the first ledger line of the week (the meter moves in whole points, so the rate carries about ±1 point). Counts only sessions under `projectRoots`. |
+| `mcp__stool__usage_since` | What the agents (and the main conversation, with `ledgerMainTurns`) used since a time, by agent or by session: `0.4w% (150k tokens)`. Each line is priced at API list prices (Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50, Fable 5.1 $10/$50 per million tokens in/out; cache reads at their own rates, writes at `ledgerCacheWriteMult` times input); weekly points use a rate from the weekly meter's climb over the dollars logged since the first ledger line of the week (the meter moves in whole points, so the rate carries about ±1 point, tighter later in the week). Counts only sessions under `projectRoots`. |
 | `mcp__stool__agent_cap` | How many Sonnet/Opus-class agents to run in parallel right now, from the pace of the 5-hour and weekly windows. |
 | `mcp__stool__restart_session` | `/clear` this session and submit a resume prompt when the turn ends; optional `model` (alias or id) runs `/model` after the clear, before the prompt. |
 | `mcp__stool__reload_plugins` | Run `/reload-plugins --force` when the turn ends. |

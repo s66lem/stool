@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { cap, line, runsOut, when } from './register'
 
@@ -59,4 +59,24 @@ test('times read as local clock times and the run-out is set against the reset',
   const p = { used: 88, projected: 145, leftMs: 66 * H, toLimitMs: 29.6 * H }
   expect(runsOut(p, now, 'UTC')).toBe('out Tuesday 9:36pm (in 1d5h36m), 1d12h24m before its reset')
   expect(runsOut({ ...p, toLimitMs: 70 * H }, now, 'UTC')).toBe('would run out 4h00m after its reset')
+})
+
+test('the meter log gets a line each time a reading moves, when usageLog is on', { options: { usageLog: true } }, async ($, on) => {
+  mock.clock(on, { now: 5 * H })
+  const w = { file: '', n: 0 }
+  on('fs.read', () => { if (!w.file) throw new Error('ENOENT'); return { value: w.file } })
+  on('fs.write', (_$, e) => { w.file = e.text; return { value: undefined } })
+  on('env.get', () => ({ value: 'C:/Users/dev' }) as never)
+  on('session.measure', (_$, e) => ({ changed: e.changed }) as never)
+  on('state.set', () => ({ value: undefined }) as never)
+  on('store.get', () => ({ value: undefined }) as never)
+  on('store.set', () => ({ value: undefined }) as never)
+  const measure = (five: number, wk: number) => $.session.measure({ context: { window: 1, percent: 0 }, rateLimits: [{ kind: 'five_hour', percentUsed: five, resetsAt: '2026-10-10T11:40:00Z' }, { kind: 'seven_day', percentUsed: wk, resetsAt: '2026-10-15T10:00:00Z' }], changed: ['rateLimits'] } as never)
+  await measure(12, 22)
+  await measure(12, 22) // unchanged: no second line
+  await measure(13, 22)
+  const lines = w.file.trim().split('\n').map(l => JSON.parse(l))
+  expect(lines.length).toBe(2)
+  expect(lines[0]).toEqual({ t: 5 * H, five: 12, week: 22, weekResetsAt: '2026-10-15T10:00:00Z' })
+  expect(lines[1].five).toBe(13)
 })

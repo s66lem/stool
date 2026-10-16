@@ -1,5 +1,5 @@
-// The agent ledger as numbers: parse its lines, weigh them in cost units, and turn units into weekly-percent points
-// at a rate calibrated from the weekly meter. Pure: no engine calls (agent-meter's register.ts does the reading).
+// The agent ledger as numbers: parse its lines, price them in dollars at list prices, and turn dollars into
+// weekly-percent points at a rate calibrated from the weekly meter. Pure: no engine calls (agent-meter's register.ts does the reading).
 
 export const HEADER_OLD = 'time\tcwd\ttype\tmodel\tdescription\tcalls\ttokens\tseconds\tcap'
 export const HEADER = `${HEADER_OLD}\tagent\tinput\toutput\tcache_read\tcache_write\tsession`
@@ -26,21 +26,33 @@ export function parse(text: string): Row[] {
     })
 }
 
-// the owner's cost weights: a model's price relative to Haiku, and what each token kind costs against plain input
-export const weight = (model: string) => (/opus/i.test(model) ? 5 : /haiku/i.test(model) ? 1 : 3)
-export const units = (r: Row) => weight(r.model) * (r.input + 0.1 * r.cacheRead + 1.25 * r.cacheWrite + 5 * r.output)
+// API list prices in $ per million tokens: input, output, cache read (Oct 2026; an unknown model is priced as Sonnet)
+// ponytail: Haiku's higher price for prompts over 100K is not applied (a turn's counts are summed, its prompt size is
+// not known); a model's price change needs this table edited
+const PRICES: [RegExp, [number, number, number]][] = [
+  [/fable/i, [10, 50, 0.25]],
+  [/opus/i, [4, 20, 0.2]],
+  [/haiku/i, [0.1, 0.5, 0.01]],
+  [/./, [2, 10, 0.2]],
+]
+/** A cache write costs 1.25x input for 5 minutes and 2x for 1 hour; the turn's counts do not say which, so a blend. */
+export const WRITE_MULT = 1.4
+export const dollars = (r: Row, writeMult = WRITE_MULT) => {
+  const [i, o, c] = (PRICES.find(([re]) => re.test(r.model)) ?? PRICES[PRICES.length - 1])[1]
+  return (r.input * i + r.output * o + r.cacheRead * c + r.cacheWrite * i * writeMult) / 1e6
+}
 
-export type Sum = { runs: number; tokens: number; units: number; unsplit: number }
-const empty = (): Sum => ({ runs: 0, tokens: 0, units: 0, unsplit: 0 })
+export type Sum = { runs: number; tokens: number; usd: number; unsplit: number }
+const empty = (): Sum => ({ runs: 0, tokens: 0, usd: 0, unsplit: 0 })
 
 /** The main conversation's turns apart from the agents', over the rows that pass `keep`. */
-export function sum(rows: Row[], keep: (r: Row) => boolean): { lead: Sum; agents: Sum } {
+export function sum(rows: Row[], keep: (r: Row) => boolean, writeMult = WRITE_MULT): { lead: Sum; agents: Sum } {
   const out = { lead: empty(), agents: empty() }
   for (const r of rows.filter(keep)) {
     const s = r.type === 'main' ? out.lead : out.agents
     s.runs++
     s.tokens += r.tokens
-    if (r.isSplit) s.units += units(r)
+    if (r.isSplit) s.usd += dollars(r, writeMult)
     else s.unsplit++
   }
   return out
@@ -48,16 +60,16 @@ export function sum(rows: Row[], keep: (r: Row) => boolean): { lead: Sum; agents
 
 export type Anchor = { at: number; pct: number }
 
-/** Weekly-percent points per million units: the weekly meter's climb since the anchor over the units logged since. */
-export function rate(rows: Row[], anchor: Anchor, pctNow: number, now: number) {
-  const u = sum(rows, r => r.at >= anchor.at && r.at <= now)
-  const total = u.lead.units + u.agents.units
+/** Weekly-percent points per dollar: the weekly meter's climb since the anchor over the dollars logged since. */
+export function rate(rows: Row[], anchor: Anchor, pctNow: number, now: number, writeMult = WRITE_MULT) {
+  const u = sum(rows, r => r.at >= anchor.at && r.at <= now, writeMult)
+  const usd = u.lead.usd + u.agents.usd
   const pts = pctNow - anchor.pct
-  return { pts, units: total, perM: total > 0 && pts > 0 ? (pts / total) * 1e6 : undefined, hasLead: u.lead.runs > 0 }
+  return { pts, usd, perUsd: usd > 0 && pts > 0 ? pts / usd : undefined, hasLead: u.lead.runs > 0 }
 }
 
 export const fmtTokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}m` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n))
-export const fmtW = (w: number) => `${w >= 10 ? w.toFixed(0) : w >= 1 ? w.toFixed(1) : w.toFixed(2)}w%`
+export const fmtW = (w: number) => `${w >= 10 ? w.toFixed(0) : w >= 0.1 ? w.toFixed(1) : w.toFixed(2)}w%`
 
 /** "10m", "2h", "1d" before now, or any date text. */
 export function since(arg: string, now: number): number | undefined {

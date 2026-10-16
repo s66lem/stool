@@ -1517,6 +1517,7 @@ const PARTS: [string, string, string, string, string[]][] = [
   ['leadGuard', 'Lead guard', 'Denies the main conversation known slips: git add -A, cd out of the project, shell writes to docs.', 'Agents', []],
   ['captureGuard', 'Capture guard', 'Stops after two slow screen captures in a row and shows free RAM on the usage strip.', 'Agents', ['captureTool']],
   ['ledgerMainTurns', 'Log main turns', 'Adds the main conversation to the agent ledger so the usage_since tool can split lead from agents and calibrate weekly percent. A file write each turn.', 'Usage', []],
+  ['usageLog', 'Log meter readings', 'Appends the 5-hour and weekly readings to usage-log.jsonl each time one moves, for calibration. A small write a few times an hour.', 'Usage', []],
   ['restartHandoffLint', 'Handoff lint', 'Warns when a write to the handoff file leaves two headings or a stale time.', 'Restarts', []],
   ['restartPublishCounter', 'Publish counter', 'Counts runs of a command and says when a restart is due.', 'Restarts', ['restartPublishPattern']],
 ]

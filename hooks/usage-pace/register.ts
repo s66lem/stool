@@ -2,6 +2,8 @@ import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import type { UsageStrip, UsageWindow } from '../../types'
 
+import { expand, flag } from '../config'
+
 const H = 3600_000
 const WINDOW_MS: Record<string, number> = { five_hour: 5 * H, seven_day: 168 * H }
 // before this much of a window has passed one burst reads as a rate: raise it if the warning cries wolf
@@ -158,8 +160,11 @@ async function publish($: EngineInterface, limits: SessionRateLimit[], now: numb
   await $.state.set(STRIP, strip)
 }
 
-export const register: Register = on => {
+export const USAGE_LOG = '~/.claude/stool/usage-log.jsonl'
+
+export const register: Register = (on, options) => {
   let wasEarly = false
+  let lastLogged = ''
   const samples: Sample[] = []
 
   on('session.start', { cwd: /[^]*|a{29}/ }, async ($, e, next) => {
@@ -188,6 +193,19 @@ export const register: Register = on => {
     const warning = line(e.rateLimits, now, samples)
     //
     await publish($, e.rateLimits, now, samples)
+    // every reading that differs from the last, one JSON line each: {t, five, week, weekResetsAt}
+    if (flag(options, 'usageLog')) {
+      const five = e.rateLimits.find(l => l.kind === 'five_hour')
+      const week = e.rateLimits.find(l => l.kind === 'seven_day')
+      const key = `${five?.percentUsed}|${week?.percentUsed}`
+      if (key !== lastLogged && (five || week)) {
+        lastLogged = key
+        const file = expand((await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')), USAGE_LOG)
+        const old = await $.fs.read(file).catch(() => '')
+        // ponytail: read-modify-write like the ledger; two sessions measuring in the same instant can drop a line
+        await $.fs.write(file, old + JSON.stringify({ t: now, five: five?.percentUsed ?? null, week: week?.percentUsed ?? null, weekResetsAt: week?.resetsAt ?? null }) + '\n')
+      }
+    }
     if (warning !== undefined && !wasEarly) $.ui.toast(warning)
     wasEarly = warning !== undefined
 
