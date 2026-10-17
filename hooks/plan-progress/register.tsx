@@ -1514,7 +1514,7 @@ let doneStaysMs = 30_000
 // the group it sits in, and the /config fields it needs filled before it does anything (noted while they are empty)
 const PARTS: [string, string, string, string, string[]][] = [
   ['dispatchGuard', 'Dispatch guard', 'Adds your standing orders to every agent prompt and holds Sonnet and Opus agents to the agent cap across all sessions.', 'Agents', []],
-  ['bypassCommand', 'Bypass command', 'Adds /bypass on|off: this session stops asking for permission, also over Remote Control where the mode picker has no bypass. Deny rules and guards still apply.', 'Agents', []],
+  ['bypassCommand', 'Permission command', 'Adds /stoolpermission <mode> [--persist]: set the permission mode (auto, acceptEdits, bypass, ...) also over Remote Control, and hold a project folder to it.', 'Agents', []],
   ['leadGuard', 'Lead guard', 'Denies the main conversation known slips: git add -A, cd out of the project, shell writes to docs.', 'Agents', []],
   ['captureGuard', 'Capture guard', 'Stops after two slow screen captures in a row and shows free RAM on the usage strip.', 'Agents', ['captureTool']],
   ['ledgerMainTurns', 'Log main turns', 'Adds the main conversation to the agent ledger so the usage_since tool can split lead from agents and calibrate weekly percent. A file write each turn.', 'Usage', []],

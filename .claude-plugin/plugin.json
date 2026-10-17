@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -94,8 +94,8 @@
     },
     "bypassCommand": {
       "type": "boolean",
-      "title": "Bypass command",
-      "description": "Adds /bypass on|off: this session stops asking for permission (it works over Remote Control, where the mode picker has no bypass). Deny rules and guards still apply",
+      "title": "Permission command",
+      "description": "Adds /stoolpermission <mode> [--persist]: set the session's permission mode (default, acceptEdits, auto, dontAsk, bypassPermissions) where the client's picker lacks one, such as bypass over Remote Control; --persist holds the project folder to it",
       "default": false
     },
     "ledgerMainTurns": {
