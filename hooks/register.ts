@@ -2,6 +2,7 @@
 import type { Register } from 'claude-code'
 
 import { register as agentMeter } from './agent-meter/register'
+import { register as bypass } from './bypass/register'
 import { register as dispatchGuard } from './dispatch-guard/register'
 import { register as freshRestart } from './fresh-restart/register'
 import { register as keepWarm } from './keep-warm/register'
@@ -21,4 +22,5 @@ export const register: Register = (on, options) => {
   restartClock(on, options)
   agentMeter(on, options)
   captureGuard(on, options)
+  bypass(on, options)
 }

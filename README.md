@@ -56,6 +56,7 @@ Answer `y` to add the marketplace, pick a scope, then set the options (every one
 | Restart clock (`restart-clock`) | context part: yes | Says (a note on a tool result, red on the strip) when the main conversation reaches `restartContextAt` percent of context. Opt-in extras: a publish counter and a handoff-file lint. |
 | Agent meter (`agent-meter`) | yes | Counts each subagent's tool calls against the cap its prompt states ("about 40 tool calls"), toasts once over it, and appends one line per finished agent to a ledger file (with its four token counts, id and session). Tool `usage_since`. |
 | Dispatch guard (`dispatch-guard`) | no | Appends standing orders to every Agent prompt, can require a tool-call cap on prompts matching a pattern, and holds expensive agents to the agent cap across all your sessions (through a shared slot file; Haiku and `dispatchCheapAgents` types are not counted, and an agent resumed with SendMessage takes its slot again). |
+| Bypass command (`bypass`) | no | `/bypass on|off`: the session stops asking for permission, for clients whose mode picker has no bypass (Remote Control on a phone). It turns `ask` into `allow` only: deny rules and guards still apply, and a plugin reload turns it off. |
 | Lead guard (`lead-guard`) | no | Denies known slips of the main conversation (not subagents): `git add -A`, `cd` out of the project folder, shell writes to chosen doc paths, check scripts piped to `tail`, plus a nudge after repeated full-size image reads. |
 | Capture guard (`capture-guard`) | no | Circuit breaker on a slow screen-capture tool (stops after two failures in a row) and a strip value with free RAM and the count of the watched app's windows. Windows only for the strip. |
 
@@ -73,6 +74,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `stripCheap`, `stripProjection`, `stripReset` | true | How the strip draws them: the cheap-agent count in front (`1+2/4`), where each usage window is heading, and the time left to its reset. |
 | `slotFile` | `~/.claude/stool/agent-slots.json` | File shared by all sessions that counts running agents (written by the dispatch guard, read by the usage strip). |
 | `agentLedger` | `~/.claude/stool/agent-ledger.tsv` | Tab-separated ledger, one line per finished subagent (and per main turn when `ledgerMainTurns` is on). |
+| `bypassCommand` | false | Adds `/bypass on|off`: this session stops asking for permission, also over Remote Control where the mode picker has no bypass. Deny rules and guards still apply; a plugin reload turns it off. |
 | `ledgerCacheWriteMult` | 1.4 | What a cache-write token costs against an input token when `usage_since` prices the ledger (1.25 for 5-minute writes, 2 for 1-hour writes; a turn's counts do not say which). |
 | `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
@@ -101,7 +103,7 @@ The settings window (`/plan-progress-settings`, or the gear in the footer) shows
 
 ## Commands
 
-`/progress`, `/progress-demo`, `/progress-sounds`, `/progress-clear`, `/progress-agents` (fold or show agent strips), `/plan-progress-autoclose`, `/plan-progress-settings`, `/ribbon` (print what the usage strip sees), `/keepwarm`.
+`/progress`, `/progress-demo`, `/progress-sounds`, `/progress-clear`, `/progress-agents` (fold or show agent strips), `/plan-progress-autoclose`, `/plan-progress-settings`, `/ribbon` (print what the usage strip sees), `/keepwarm`, `/bypass`.
 
 ## Tools (for the model)
 
