@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -97,6 +97,12 @@
       "title": "Permission command",
       "description": "Adds /stoolpermission <mode> [--persist]: set the session's permission mode (default, acceptEdits, auto, dontAsk, bypassPermissions) where the client's picker lacks one, such as bypass over Remote Control; --persist holds the project folder to it",
       "default": false
+    },
+    "reloadNonce": {
+      "type": "number",
+      "title": "Reload counter",
+      "description": "Set by the reload_plugins tool over Remote Control, where /reload-plugins is refused: changing an option reloads the plugin. Leave it",
+      "default": 0
     },
     "ledgerMainTurns": {
       "type": "boolean",

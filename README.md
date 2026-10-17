@@ -113,7 +113,7 @@ The settings window (`/plan-progress-settings`, or the gear in the footer) shows
 | `mcp__stool__usage_since` | What the agents (and the main conversation, with `ledgerMainTurns`) used since a time, by agent or by session: `0.4w% (150k tokens)`. Each line is priced at API list prices (Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50, Fable 5.1 $10/$50 per million tokens in/out; cache reads at their own rates, writes at `ledgerCacheWriteMult` times input); weekly points use a rate from the weekly meter's climb over the dollars logged since the first ledger line of the week (the meter moves in whole points, so the rate carries about ±1 point, tighter later in the week). Counts only sessions under `projectRoots`. |
 | `mcp__stool__agent_cap` | How many Sonnet/Opus-class agents to run in parallel right now, from the pace of the 5-hour and weekly windows. |
 | `mcp__stool__restart_session` | `/clear` this session and submit a resume prompt when the turn ends; optional `model` (alias or id) runs `/model` after the clear, before the prompt. |
-| `mcp__stool__reload_plugins` | Run `/reload-plugins --force` when the turn ends. |
+| `mcp__stool__reload_plugins` | Run `/reload-plugins --force` when the turn ends. Over Remote Control, where that command is refused, it bumps the unused `reloadNonce` option instead: a changed option reloads stool (only stool, not the other plugins). |
 | `mcp__stool__keep_warm` | Turn keep-warm off or on for this session (only registered inside `projectRoots`). |
 
 A subagent's shell commands also get `PLAN_PROGRESS_FILE` set to `~/.claude/stool/plan-progress-runs/<agentId>.json`; a script that writes `{"label","done","total"}` there gets a thin progress bar on that agent's strip while the file is under 30 s old.
