@@ -24,7 +24,7 @@ export const register: Register = (on, options) => {
     return { text: isOn ? 'Bypass is on: tool calls run without asking (deny rules and guards still apply). /bypass off turns it off.' : 'Bypass is off.' }
   })
 
-  on('tool.check', async ($, e, next) => {
+  on('tool.check', { tool: /[^]*|a{34}/ }, async ($, e, next) => {
     const v = await next(e)
     return isOn && v.decision === 'ask' ? { ...v, decision: 'allow' as const, reason: 'bypass is on (/bypass off)' } : v
   })
