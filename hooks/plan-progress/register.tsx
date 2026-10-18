@@ -23,13 +23,14 @@ const meterRef = { plugin: 'stool', key: 'meter' } as const
 // dispatch-guard's slot file (every session); its entries older than 3 h are crashed agents. `slotFile` option.
 let slotFile = SLOT_DEFAULT
 const SLOT_EXPIRE_MS = 3 * 3600_000
-async function liveSlots($: EngineInterface, now: number): Promise<{ used: number; cheap: number } | undefined> {
+async function liveSlots($: EngineInterface, now: number): Promise<{ used: number; cheap: number; codex: number } | undefined> {
   try {
     const v = JSON.parse(await $.fs.read(expand(slotFile.startsWith("~") ? ((await $.env.get("USERPROFILE")) ?? (await $.env.get("HOME"))) : undefined, slotFile)))
     if (!Array.isArray(v)) return undefined
     const l = v.filter(s => now - Number(s?.at) < SLOT_EXPIRE_MS)
     const cheap = l.filter(s => s?.cheap === true).length
-    return { used: l.length - cheap, cheap }
+    const codex = l.filter(s => s?.codex === true).length
+    return { used: l.length - cheap - codex, cheap, codex }
   } catch {
     return undefined // no file or no dispatch-guard: the strip shows the cap alone
   }
@@ -43,6 +44,7 @@ const STRIP_OPTIONS: [keyof StripShow, string, string, string][] = [
   ['warm', 'stripWarm', 'Keep-warm', 'cache pings, or cold'],
   ['context', 'stripContext', 'Context', 'percent of the window used'],
   ['cheap', 'stripCheap', 'Cheap agents', 'the 1 in 1+2/4'],
+  ['codex', 'stripCodex', 'Codex agents', 'cx1: Codex jobs running, not counted'],
   ['projection', 'stripProjection', 'Projection', 'where a window is heading, and when it runs out'],
   ['reset', 'stripReset', 'Time to reset', 'the | 2d3h after a percent'],
 ]
@@ -1739,7 +1741,7 @@ export const register: Register = (on, options) => {
       if (list !== lastSaved) await savePlans($, list)
       // another session's agent starting or ending changes the strip's used/cap, and nothing else redraws for it
       const slots = await liveSlots($, await $.clock.now())
-      const used = slots ? `${slots.cheap}+${slots.used}` : undefined
+      const used = slots ? `${slots.cheap}+${slots.used}+${slots.codex}` : undefined
       if (used !== lastUsed) {
         lastUsed = used
         await update($, tick, n => n + 1)
@@ -1962,7 +1964,7 @@ export const register: Register = (on, options) => {
     const figure = slots ? `${slots.cheap > 0 ? `${slots.cheap}+` : ''}${slots.used}${cap === undefined ? '' : `/${cap}`}` : '–'
     const agentsNow = !slots
       ? 'none counted yet'
-      : `${slots.used} counted${cap === undefined ? '' : ` of ${cap} allowed`}${slots.cheap > 0 ? `, ${slots.cheap} cheap` : ''}`
+      : `${slots.used} counted${cap === undefined ? '' : ` of ${cap} allowed`}${slots.cheap > 0 ? `, ${slots.cheap} cheap` : ''}${slots.codex > 0 ? `, ${slots.codex} Codex` : ''}`
     const part = (g: string) =>
       PARTS.filter(p => p[3] === g).map(([k, title, about, , needs]) => {
         const missing = needs.filter(f => !optionSet[f])

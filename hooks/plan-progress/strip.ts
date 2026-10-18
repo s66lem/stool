@@ -61,8 +61,8 @@ function windowSpans(w: UsageWindow, now: number, c: { main: string; bar: string
 
 /** What the strip reads besides usage-pace and keep-warm: live Sonnet/Opus agents across sessions, restart-clock. */
 /** What the strip shows: a group or a detail is drawn unless its flag is false (the `strip*` options). */
-export type StripShow = { agents?: boolean; cheap?: boolean; weekly?: boolean; five?: boolean; warm?: boolean; context?: boolean; reset?: boolean; projection?: boolean }
-export type Extra = { used?: number; cheap?: number; restart?: RestartStrip; show?: StripShow }
+export type StripShow = { agents?: boolean; cheap?: boolean; codex?: boolean; weekly?: boolean; five?: boolean; warm?: boolean; context?: boolean; reset?: boolean; projection?: boolean }
+export type Extra = { used?: number; cheap?: number; codex?: number; restart?: RestartStrip; show?: StripShow }
 
 function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, now: number, extra: Extra = {}): Group[] {
   const out: Group[] = []
@@ -88,6 +88,8 @@ function groups(usage: UsageStrip | undefined, warm: KeepWarmStrip | undefined, 
             { text: String(extra.used), size: 15, fill: '#FF9FA0', tip: 'Agents Running' },
             { text: '/', size: 15, fill: '#FE5D60', tip: '/' },
             { text: String(usage.cap), size: 15, fill: '#E42626', tip: 'Agent Cap' },
+            // Codex agents run on OpenAI, apart from the cap: "cx2" after it, in teal
+            ...(extra.codex && show.codex !== false ? [{ text: `cx${extra.codex}`, size: 15, fill: '#5EC8B6', gap: 8, tip: 'Codex Agents Running' }] : []),
           ],
   })
   if (usage.weekly && show.weekly !== false)

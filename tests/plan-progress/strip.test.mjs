@@ -95,6 +95,10 @@ await E3.everyTick()
 assert.ok((await slotsText(E3)).includes('1+2/4'), 'cheap+counted/cap')
 
 // the strip's own options: a group or a detail left out when its flag is false
+// Codex agents sit apart from the cap: "cx2" after it, and off with the flag
+assert.ok(stripText(usage, warm, now, { used: 1, codex: 2 }).includes('1/4cx2'), 'codex count')
+assert.ok(!stripText(usage, warm, now, { used: 1, codex: 2, show: { codex: false } }).includes('cx2'), 'codex off')
+assert.ok(!stripText(usage, warm, now, { used: 1 }).includes('cx'), 'no codex, no cx')
 const full = stripText(usage, warm, now, { used: 1 })
 assert.ok(full.includes('week') && full.includes('93% | 2d3h') && full.includes('147%'), 'everything on by default')
 const hidden = stripText(usage, warm, now, { used: 1, show: { weekly: false, reset: false, projection: false } })

@@ -71,6 +71,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `twinkle` | true | Animate the dots of the terminal bar while Claude works. |
 | `keepWarm` | true | Master switch for keep-warm. |
 | `stripAgents`, `stripWeekly`, `stripFive`, `stripWarm`, `stripContext` | true | Which groups the usage strip draws: agents / cap, weekly usage, 5-hour usage, keep-warm, context. Also switches in the settings window. |
+| `stripCodex` | true | Show the Codex agents running (`cx1`, teal, after the agent count): the Codex plugin's agents run on OpenAI, so they are listed apart and never count against the agent cap. Needs the dispatch guard. |
 | `stripCheap`, `stripProjection`, `stripReset` | true | How the strip draws them: the cheap-agent count in front (`1+2/4`), where each usage window is heading, and the time left to its reset. |
 | `slotFile` | `~/.claude/stool/agent-slots.json` | File shared by all sessions that counts running agents (written by the dispatch guard, read by the usage strip). |
 | `agentLedger` | `~/.claude/stool/agent-ledger.tsv` | Tab-separated ledger, one line per finished subagent (and per main turn when `ledgerMainTurns` is on). |

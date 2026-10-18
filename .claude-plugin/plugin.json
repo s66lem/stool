@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.9.1",
+  "version": "2.10.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -60,6 +60,12 @@
       "type": "boolean",
       "title": "Strip: cheap agent count",
       "description": "Show the cheap (Haiku) agents running in front of the count, as in 1+2/4",
+      "default": true
+    },
+    "stripCodex": {
+      "type": "boolean",
+      "title": "Strip: Codex agents",
+      "description": "Show the Codex agents running (cx1) after the agent count on the usage strip; they are not counted against the agent cap",
       "default": true
     },
     "stripProjection": {

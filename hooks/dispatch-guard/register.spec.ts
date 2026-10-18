@@ -121,3 +121,14 @@ test('a SendMessage resume takes a slot again; a cheap one does not', OPT, async
   await done('a2')
   expect(JSON.parse(w.file!).length).toBe(0)
 })
+
+test('Codex agents are listed apart and never count against the cap', OPT, async ($, on) => {
+  const w = world(on, { cap: 1 })
+  await spawn($, { subagentType: 'codex:codex-rescue' })
+  await spawn($, { subagentType: 'codex:codex-rescue' })
+  expect(JSON.parse(w.file!)).toEqual([{ id: 'a1', at: NOW, codex: true }, { id: 'a2', at: NOW, codex: true }])
+  await spawn($) // the one counted agent still fits under a cap of 1
+  expect((await spawn($)).deny).toContain('agent_cap is 1')
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer', agentId: 'a1' })
+  expect((JSON.parse(w.file!) as { id: string }[]).map(s => s.id)).toEqual(['a2', 'a3'])
+})
