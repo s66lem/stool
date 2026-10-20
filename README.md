@@ -60,6 +60,8 @@ Answer `y` to add the marketplace, pick a scope, then set the options (every one
 | Lead guard (`lead-guard`) | no | Denies known slips of the main conversation (not subagents): `git add -A`, `cd` out of the project folder, shell writes to chosen doc paths, check scripts piped to `tail`, plus a nudge after repeated full-size image reads. |
 | Capture guard (`capture-guard`) | no | Circuit breaker on a slow screen-capture tool (stops after two failures in a row) and a strip value with free RAM and the count of the watched app's windows. Windows only for the strip. |
 
+Tools can go missing in a session that resumed after a reboot (their registration ran before the session was bound). At every prompt stool checks the model's tool list and offers again whichever of `agent_cap`, `restart_session`, `reload_plugins`, `usage_since` and `keep_warm` is missing; a re-offered tool shows from the next prompt.
+
 ## Options
 
 All options are plugin `userConfig` fields. Lists are lists of strings; "regex source" fields take the text of a JavaScript regular expression (an invalid one matches nothing).

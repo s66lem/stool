@@ -1,4 +1,4 @@
-import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
+import type { EngineInterface, Register, SessionRateLimit, ToolSpec } from 'claude-code'
 
 import type { UsageStrip, UsageWindow } from '../../types'
 
@@ -162,19 +162,21 @@ async function publish($: EngineInterface, limits: SessionRateLimit[], now: numb
 
 export const USAGE_LOG = '~/.claude/stool/usage-log.jsonl'
 
+export const AGENT_CAP_TOOL: ToolSpec = {
+  name: 'agent_cap',
+  description:
+    'How many agents to run in parallel right now, from the pace of the 5-hour and weekly usage windows. Call it before dispatching a batch of agents; the cap governs new dispatches only.',
+  inputSchema: { type: 'object', properties: {} },
+  isDeferred: false,
+}
+
 export const register: Register = (on, options) => {
   let wasEarly = false
   let lastLogged = ''
   const samples: Sample[] = []
 
   on('session.start', { cwd: /[^]*|a{29}/ }, async ($, e, next) => {
-    await $.tool.register({
-      name: 'agent_cap',
-      description:
-        'How many agents to run in parallel right now, from the pace of the 5-hour and weekly usage windows. Call it before dispatching a batch of agents; the cap governs new dispatches only.',
-      inputSchema: { type: 'object', properties: {} },
-      isDeferred: false,
-    })
+    await $.tool.register(AGENT_CAP_TOOL)
 
     return next(e)
   })

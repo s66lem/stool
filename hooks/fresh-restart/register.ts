@@ -1,4 +1,4 @@
-import type { Register } from 'claude-code'
+import type { Register, ToolSpec } from 'claude-code'
 
 const TOOL = 'mcp__stool__restart_session'
 
@@ -11,29 +11,33 @@ let model: string | undefined
 const RELOAD = 'mcp__stool__reload_plugins'
 let reload = false
 
+export const RESTART_TOOL: ToolSpec = {
+  name: 'restart_session',
+  description:
+    'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this. `model` is optional; switches this session to that model before the resume prompt.',
+  inputSchema: {
+    type: 'object',
+    required: ['prompt'],
+    properties: {
+      prompt: { type: 'string', description: 'Self-contained resume prompt for the fresh context' },
+      model: { type: 'string', description: 'Optional; model alias or id ("sonnet", "opus", "claude-sonnet-5-5") to switch to before the prompt' },
+    },
+  },
+  isDeferred: false,
+}
+
+export const RELOAD_TOOL: ToolSpec = {
+  name: 'reload_plugins',
+  description:
+    'Runs /reload-plugins --force in this session once the current turn ends, so edited mods are loaded without the user typing the command (it cannot be typed over Remote Control). Call it only when the user asked for a reload or for a mod change to take effect.',
+  inputSchema: { type: 'object', properties: {} },
+  isDeferred: false,
+}
+
 export const register: Register = on => {
   on('session.start', { cwd: /[^]*|a{6}/ }, async ($, e, next) => {
-    await $.tool.register({
-      name: 'restart_session',
-      description:
-        'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this. `model` is optional; switches this session to that model before the resume prompt.',
-      inputSchema: {
-        type: 'object',
-        required: ['prompt'],
-        properties: {
-          prompt: { type: 'string', description: 'Self-contained resume prompt for the fresh context' },
-          model: { type: 'string', description: 'Optional; model alias or id ("sonnet", "opus", "claude-sonnet-5-5") to switch to before the prompt' },
-        },
-      },
-      isDeferred: false,
-    })
-    await $.tool.register({
-      name: 'reload_plugins',
-      description:
-        'Runs /reload-plugins --force in this session once the current turn ends, so edited mods are loaded without the user typing the command (it cannot be typed over Remote Control). Call it only when the user asked for a reload or for a mod change to take effect.',
-      inputSchema: { type: 'object', properties: {} },
-      isDeferred: false,
-    })
+    await $.tool.register(RESTART_TOOL)
+    await $.tool.register(RELOAD_TOOL)
     return next(e)
   })
 

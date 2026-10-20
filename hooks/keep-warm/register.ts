@@ -1,6 +1,6 @@
 // keep-warm: the warming loop of karanb192/cache-tax (MIT), without its arming command, cold-send guard or band.
 // It arms itself after every turn of a big session and gives up after MAX_PINGS idle pings in a row.
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
 import type { KeepWarmStrip } from '../../types'
 import { flag, inScope, roots } from '../config'
@@ -109,6 +109,14 @@ async function ping($: EngineInterface, s: State) {
   await arm($, s)
 }
 
+export const KEEP_WARM_TOOL: ToolSpec = {
+  name: 'keep_warm',
+  description:
+    "Turn this session's idle cache warming off or on. Call it only after the user has answered, in chat, whether keep-warm should be turned off (for example when they hand this session's work off to a new session).",
+  inputSchema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
+  isDeferred: false,
+}
+
 export const register: Register = (on, options) => {
   if (options?.keepWarm === false) return
   const s = freshState()
@@ -120,13 +128,7 @@ export const register: Register = (on, options) => {
     })
     s.scoped = inScope(e.cwd, roots(options))
     if (s.scoped)
-      await $.tool.register({
-        name: 'keep_warm',
-        description:
-          "Turn this session's idle cache warming off or on. Call it only after the user has answered, in chat, whether keep-warm should be turned off (for example when they hand this session's work off to a new session).",
-        inputSchema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
-        isDeferred: false,
-      })
+      await $.tool.register(KEEP_WARM_TOOL)
     return next(e)
   })
 

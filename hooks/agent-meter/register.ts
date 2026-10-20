@@ -1,7 +1,7 @@
 // agent-meter: per-agent tool-call count vs the cap its prompt states, and a ledger line per finished agent
 //. Spike: tool.call and turn.complete carry agentId; turn.complete carries
 // durationMs and usage (4 token counts); agent.spawn answers agentId. Live token counts need a turn.step stream hook: skipped.
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
 import { expand, flag, inScope, num, roots, text } from '../config'
 import { WRITE_MULT, extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
@@ -40,6 +40,21 @@ async function ensureAnchor($: EngineInterface, now: number) {
     await $.store.set(key, anchor)
   }
   return { anchor, pct: week.percentUsed, resetsAt: week.resetsAt }
+}
+
+export const USAGE_SINCE_TOOL: ToolSpec = {
+  name: 'usage_since',
+  description:
+    'What the agents (and, when ledgerMainTurns is on, the main conversation) used since a time or by one agent: tokens and weekly-percent points, like "0.4w% (150k tokens)". Weekly points are an estimate at a rate calibrated from the weekly meter.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      since: { type: 'string', description: 'How far back: 30m, 2h, 1d, or a date. Default 1h.' },
+      agent: { type: 'string', description: 'Only this agent id (a prefix is enough).' },
+      session: { type: 'string', description: 'Only this session id (a prefix is enough).' },
+    },
+  },
+  isDeferred: true,
 }
 
 export const register: Register = (on, options) => {
@@ -92,20 +107,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.start', { cwd: /[^]*|a{31}/ }, async ($, e, next) => {
-    await $.tool.register({
-      name: 'usage_since',
-      description:
-        'What the agents (and, when ledgerMainTurns is on, the main conversation) used since a time or by one agent: tokens and weekly-percent points, like "0.4w% (150k tokens)". Weekly points are an estimate at a rate calibrated from the weekly meter.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          since: { type: 'string', description: 'How far back: 30m, 2h, 1d, or a date. Default 1h.' },
-          agent: { type: 'string', description: 'Only this agent id (a prefix is enough).' },
-          session: { type: 'string', description: 'Only this session id (a prefix is enough).' },
-        },
-      },
-      isDeferred: true,
-    })
+    await $.tool.register(USAGE_SINCE_TOOL)
     return next(e)
   })
 
