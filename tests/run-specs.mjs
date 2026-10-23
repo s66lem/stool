@@ -22,7 +22,9 @@ for (const m of mods) {
   const ext = existsSync(join(tmp, 'hooks', m, 'register.tsx')) ? 'tsx' : 'ts'
   writeFileSync(join(tmp, 'hooks/hooks.json'), JSON.stringify({ modules: [`./${m}/register.${ext}`] }))
   const r = spawnSync('claude', ['plugin', 'test', tmp], { encoding: 'utf8', shell: true })
-  const tail = (r.stdout + r.stderr).split('\n').filter(l => /^\(fail\)|^ \d+ (pass|fail)/.test(l)).join('\n')
+  // a failing test's error lines come with its name, so a failure reads without keeping the scratch plugin
+  const all = (r.stdout + r.stderr).split('\n')
+  const tail = all.filter((l, i) => /^\(fail\)|^ \d+ (pass|fail)/.test(l) || (l.startsWith('  ') && /^\(fail\)/.test(all[i - 1] ?? '')) || (l.startsWith('  ') && l.trim() && all.slice(Math.max(0, i - 3), i).some(p => /^\(fail\)/.test(p)))).join('\n')
   console.log(`== ${m}\n${tail}`)
   if (r.status) failed++
   rmSync(tmp, { recursive: true, force: true })
