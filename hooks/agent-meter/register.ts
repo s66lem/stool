@@ -15,6 +15,13 @@ export const capOf = (prompt: string): number | undefined => {
   return m ? Number(m[1]) : undefined
 }
 
+// the default cap on an agent's tool calls when its prompt states none (a run past ~60 messages is 71% of subagent $,
+// measured 2026-10-24); the hard stop sits a quarter above it. `agentCallCap` 0 = off
+export const CALL_CAP = 80
+// a cap already worded in the prompt (same test as dispatch-guard; parts are tested apart, so no import)
+const hasCap = (p: string) => /\b\d+\s+tool[- ]calls?\b|tool[- ]call (cap|limit|budget)/i.test(p)
+export const hardOf = (cap: number) => cap + Math.max(10, Math.ceil(cap / 4))
+
 export type Meter = { type: string; model: string; description: string; cap?: number; calls: number; warned: boolean }
 const meters = new Map<string, Meter>() // ponytail: module map, a reload forgets running agents (they then count from 0 without a cap)
 
@@ -62,24 +69,30 @@ export const register: Register = (on, options) => {
   // the main conversation's turns too (a ledger write each turn), so usage_since can split lead from agents
   const mainTurns = flag(options, 'ledgerMainTurns')
   const writeMult = num(options, 'ledgerCacheWriteMult', WRITE_MULT)
+  const dflt = num(options, 'agentCallCap', CALL_CAP)
   on('agent.spawn', { prompt: /[^]*|a{1}/ }, async ($, e, next) => {
-    const r = await next(e)
-    if (r.agentId && !e.workflow && inScope(await $.session.cwd(), roots(options)))
-      meters.set(r.agentId, { type: e.subagentType, model: r.model ?? e.model ?? '', description: e.description, cap: capOf(e.prompt), calls: 0, warned: false })
+    const isMine = !e.workflow && inScope(await $.session.cwd(), roots(options))
+    const stated = capOf(e.prompt)
+    const useDefault = isMine && dflt > 0 && stated === undefined && !hasCap(e.prompt)
+    const r = await next(useDefault ? { ...e, prompt: `${e.prompt}
+
+- Tool-call cap: about ${dflt}; when it runs out, stop and report what you have.` } : e)
+    if (r.agentId && isMine)
+      meters.set(r.agentId, { type: e.subagentType, model: r.model ?? e.model ?? '', description: e.description, cap: stated ?? (useDefault ? dflt : undefined), calls: 0, warned: false })
     return r
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: /[^]*|a{2}/ }, async ($, e, next) => {
     const m = e.agentId ? meters.get(e.agentId) : undefined
-    if (m) {
-      m.calls++
-      if (m.cap !== undefined && m.calls > m.cap && !m.warned) {
-        m.warned = true
-        $.ui.toast(`agent-meter: "${m.description}" passed its cap (${m.calls}/${m.cap} tool calls)`)
-      }
-      await $.state.set(STRIP, strip())
-    }
-    return next(e)
+    if (!m) return next(e)
+    m.calls++
+    await $.state.set(STRIP, strip())
+    if (m.cap !== undefined && m.calls > hardOf(m.cap)) return { deny: `agent-meter: tool-call limit reached (${m.calls - 1}). Stop now and report what you have; do not call more tools.` }
+    const r = await next(e)
+    if (m.cap === undefined || m.calls <= m.cap || m.warned) return r
+    m.warned = true
+    $.ui.toast(`agent-meter: "${m.description}" passed its cap (${m.calls}/${m.cap} tool calls)`)
+    return { ...r, context: [...(r.context ?? []), `agent-meter: you are past your ${m.cap} tool-call cap; wrap up and report now (tools stop at ${hardOf(m.cap)}).`] }
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', { reason: /[^]*|a{3}/ }, async ($, e, next) => {

@@ -11,6 +11,9 @@ const slash = (p: unknown) => String(p ?? '').split(String.fromCharCode(92)).joi
 const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export const CTX_AT = 65
+// absolute context too: percent of a 1M window never fires before 650k, and 29% of lead $ was spent past 400k (measured 2026-10-24)
+export const CTX_TOKENS = 150_000
+const RENAG = 50_000
 export const PUBLISHES_AT = 3
 const STRIP = { plugin: 'stool', key: 'restart' } as const
 
@@ -33,16 +36,17 @@ export function lintHandoff(body: string, now: number, heading = 'RESUME HERE'):
 }
 
 // `ctxAt` and `limit` (the publish count that makes a restart due; Infinity = counter off) come from the options
-type S = { scoped: boolean; ctx: number | null; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
-const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || s.publishes >= s.limit
+type S = { scoped: boolean; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
+const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit
 
 function publish($: EngineInterface, s: S) {
   const strip: RestartStrip = { ctx: s.ctx, publishes: s.publishes, due: due(s) }
   void $.state.set(STRIP, strip)
   if (!strip.due) s.warned = false
-  else if (!s.warned) {
+  else if (!s.warned || (s.tokens ?? 0) >= s.nagAt) {
     s.warned = true
     s.note = true
+    s.nagAt = (s.tokens ?? 0) + RENAG
   }
 }
 
@@ -52,13 +56,14 @@ async function readCtx($: EngineInterface, s: S) {
   const p = c.percent ?? (c.tokens !== undefined && c.window ? (100 * c.tokens) / c.window : undefined)
   if (p === undefined) return
   s.ctx = Math.round(p)
+  s.tokens = c.tokens ?? (c.window ? Math.round((p * c.window) / 100) : null)
   publish($, s)
 }
 
 export const register: Register = (on, options) => {
   const counter = flag(options, 'restartPublishCounter') && text(options, 'restartPublishPattern') !== ''
   const ctxAt = num(options, 'restartContextAt', CTX_AT)
-  const s: S = { scoped: false, ctx: null, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
+  const s: S = { scoped: false, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
   const publishRe = pattern(text(options, 'restartPublishPattern'))
   const lint = flag(options, 'restartHandoffLint')
   const file = esc(text(options, 'restartHandoffFile', 'HANDOFF.md'))
@@ -80,6 +85,7 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (s.scoped && e.source === 'clear') {
       s.ctx = null
+      s.tokens = null
       s.publishes = 0
       publish($, s)
     }
@@ -106,7 +112,7 @@ export const register: Register = (on, options) => {
       const r0 = await next(e)
       // once per due period, as a note on this tool result
       const r = s.note
-        ? ((s.note = false), { ...r0, context: [...(r0.context ?? []), `restart-clock: restart due (${s.ctx !== null && s.ctx >= ctxAt ? `ctx ${s.ctx}%` : `${s.publishes} publishes since the handoff was rewritten`}): run the session-restart skill at the next natural stop`] })
+        ? ((s.note = false), { ...r0, context: [...(r0.context ?? []), `restart-clock: restart due (${s.ctx !== null && s.ctx >= ctxAt ? `ctx ${s.ctx}%` : s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt ? `context ${Math.round((s.tokens ?? 0) / 1000)}k tokens, every message re-reads it` : `${s.publishes} publishes since the handoff was rewritten`}): run the session-restart skill at the next natural stop`] })
         : r0
       const path = slash((e as { file_path?: string }).file_path)
       if (!lint || r.deny !== undefined || r.isError || !fileRe.test(path)) return r

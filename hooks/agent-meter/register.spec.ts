@@ -12,14 +12,14 @@ const IN = 'C:/Users/dev/work/app'
 
 function world(on: On, cwd = IN) {
   mock.clock(on, { now: 10 * 3600_000 })
-  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0, pct: 10, store: {} as Record<string, unknown> }
+  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0, prompt: '', pct: 10, store: {} as Record<string, unknown> }
   on('session.cwd', () => ({ value: cwd }))
   on('fs.read', () => {
     if (w.file === undefined) throw new Error('ENOENT')
     return { value: w.file }
   })
   on('fs.write', (_$, e) => { w.file = e.text; return { value: undefined } })
-  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a' + ++w.n }))
+  on('agent.spawn', (_$, e) => { w.prompt = e.prompt; return { model: 'claude-sonnet-5-5', agentId: 'a' + ++w.n } })
   on('tool.call', () => ({ result: '' }) as never)
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('state.set', (_$, e: any) => { w.strip = e.value; return { value: undefined } as never })
@@ -122,4 +122,15 @@ test('usage_since sums the ledger and prices it at the calibrated rate', OPT, as
   expect(text).toContain('agents: 1 runs, 1.0m tokens, 2.5w%')
   expect(text).toContain('1 w% is about $0.8')
   expect(text).toContain('lead: 1 turns')
+})
+
+test('no stated cap: the default is told to the agent, noted past it, and tools stop a quarter beyond', { options: { ...OPT.options, agentCallCap: 4 } }, async ($, on) => {
+  const w = world(on)
+  await $.agent.spawn({ prompt: 'Fix X.', description: 'fix x', subagentType: 'implementer' })
+  expect(w.prompt).toContain('Tool-call cap: about 4')
+  const call = () => $.tool.call({ tool: 'Read', input: {}, agentId: 'a1' } as never) as Promise<{ deny?: string; context?: string[] }>
+  for (let i = 0; i < 4; i++) expect((await call()).context).toBeUndefined()
+  expect(String((await call()).context)).toContain('past your 4 tool-call cap')
+  for (let i = 0; i < 9; i++) await call() // calls 6..14 = hard limit 14
+  expect((await call()).deny).toContain('limit reached')
 })

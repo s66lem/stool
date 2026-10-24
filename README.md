@@ -82,6 +82,8 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
 | `restartContextAt` | 65 | Context percent at which a restart is due. |
+| `restartContextTokens` | 150000 | Context tokens at which a restart is due too (0 = off); re-said every 50k after. |
+| `agentCallCap` | 80 | Tool calls an agent gets when its prompt states no cap (0 = off): told to stop and report there, tools stop a quarter past it. |
 | `leadGuard` | false | Turn on the lead guard. |
 | `leadGuardDocPaths` | `docs/\|CLAUDE\.md` | Regex source: shell writes to matching paths are denied. Empty = rule off. |
 | `leadGuardCheckScripts` | `(check\|merge)\.mjs` | Regex source: piping these scripts through `tail`/`head` without `pipefail` is denied. Empty = rule off. |

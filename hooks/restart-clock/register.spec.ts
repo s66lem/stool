@@ -68,3 +68,26 @@ test('a HANDOFF.md edit that leaves two headings is warned about', OPT, async ($
   const r = await $.tool.call({ tool: 'Edit', file_path: 'C:/x/docs/HANDOFF.md', old_string: 'a', new_string: 'b' })
   expect(String(r.context)).toContain('restart-clock warning')
 })
+
+test('150k context tokens make a restart due even at a low percent; re-said every 50k', OPT, async ($, on) => {
+  let tokens = 100_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  const turn = () => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  await turn()
+  expect((await notes()).length).toBe(0)
+  tokens = 160_000
+  await turn()
+  expect((await notes())[0]).toContain('160k tokens')
+  tokens = 180_000
+  await turn()
+  expect((await notes()).length).toBe(0)
+  tokens = 215_000
+  await turn()
+  expect((await notes()).length).toBe(1)
+})
