@@ -1,0 +1,26 @@
+[
+  {
+    "id": "csv-quotes",
+    "size": "small",
+    "prompt": "Bug report: importing a CSV breaks when a title or author contains a comma, e.g. \"Dune, Messiah\",Frank Herbert,1969 comes out with the wrong title and author. Fields wrapped in double quotes may contain commas, and a doubled quote inside them (\"\") stands for one quote character. Fix the CSV parsing in src/parse.mjs so quoted fields work, add tests for it, and keep the existing tests passing.",
+    "check": "csv-quotes.test.mjs"
+  },
+  {
+    "id": "stats-command",
+    "size": "small",
+    "prompt": "Add a `stats` command to the CLI (src/cli.mjs, function run). It returns the store unchanged and this text, one item per line:\nbooks: <number of books>\nauthors: <number of distinct authors>\noldest: <title> (<year>)\nnewest: <title> (<year>)\ntop author: <author> (<number of their books>)\nTies: oldest/newest go to the alphabetically first title among books of that year; top author goes to the alphabetically first author among those with the most books. An empty store prints only `books: 0`. Add tests and keep the existing ones passing.",
+    "check": "stats-command.test.mjs"
+  },
+  {
+    "id": "rename-published",
+    "size": "small",
+    "prompt": "Rename the book field `year` to `published` across the whole project: parsing, the store, queries, formatting, the CLI and the tests. Saved JSON files written before this change still have `year`: loading them must give books with `published` and no `year` key. Output text stays the same. Keep all tests passing.",
+    "check": "rename-published.test.mjs"
+  },
+  {
+    "id": "circulation",
+    "size": "long",
+    "prompt": "Implement the library circulation feature described in docs/SPEC.md: the five modules src/loans.mjs, src/fines.mjs, src/reservations.mjs, src/reports.mjs and src/notify.mjs, with exactly the functions, error messages and output formats the spec gives. The sections cross-reference each other and the appendices hold the reference tables and worked examples, so read docs/SPEC.md in full before starting. Dispatch one subagent per module; tell each to read the whole spec first and to add tests for its module. When they are done, review every module yourself against the spec, fix what is off, and make sure all tests pass.",
+    "check": "circulation.test.mjs"
+  }
+]

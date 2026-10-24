@@ -1,0 +1,7 @@
+export function line(book) {
+  return `${book.id} | ${book.title} | ${book.author} | ${book.year}`
+}
+
+export function table(books) {
+  return books.length ? books.map(line).join('\n') : '(no books)'
+}

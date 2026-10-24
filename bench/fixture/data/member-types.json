@@ -1,0 +1,422 @@
+{
+  "adult-basic": {
+    "loanDays": 14,
+    "maxLoans": 4,
+    "graceDays": 2,
+    "finePerDay": 25,
+    "fineCap": 500
+  },
+  "adult-plus": {
+    "loanDays": 21,
+    "maxLoans": 4,
+    "graceDays": 3,
+    "finePerDay": 30,
+    "fineCap": 600
+  },
+  "adult-silver": {
+    "loanDays": 28,
+    "maxLoans": 4,
+    "graceDays": 4,
+    "finePerDay": 35,
+    "fineCap": 700
+  },
+  "adult-gold": {
+    "loanDays": 35,
+    "maxLoans": 5,
+    "graceDays": 2,
+    "finePerDay": 40,
+    "fineCap": 800
+  },
+  "adult-platinum": {
+    "loanDays": 14,
+    "maxLoans": 5,
+    "graceDays": 3,
+    "finePerDay": 45,
+    "fineCap": 900
+  },
+  "adult-branch": {
+    "loanDays": 21,
+    "maxLoans": 5,
+    "graceDays": 4,
+    "finePerDay": 50,
+    "fineCap": 1000
+  },
+  "adult-remote": {
+    "loanDays": 28,
+    "maxLoans": 6,
+    "graceDays": 2,
+    "finePerDay": 55,
+    "fineCap": 1100
+  },
+  "adult-family": {
+    "loanDays": 35,
+    "maxLoans": 6,
+    "graceDays": 3,
+    "finePerDay": 60,
+    "fineCap": 1200
+  },
+  "adult-trial": {
+    "loanDays": 14,
+    "maxLoans": 6,
+    "graceDays": 4,
+    "finePerDay": 65,
+    "fineCap": 1300
+  },
+  "adult-honorary": {
+    "loanDays": 21,
+    "maxLoans": 7,
+    "graceDays": 2,
+    "finePerDay": 70,
+    "fineCap": 1400
+  },
+  "student-basic": {
+    "loanDays": 21,
+    "maxLoans": 6,
+    "graceDays": 3,
+    "finePerDay": 10,
+    "fineCap": 300
+  },
+  "student-plus": {
+    "loanDays": 28,
+    "maxLoans": 6,
+    "graceDays": 4,
+    "finePerDay": 15,
+    "fineCap": 400
+  },
+  "student-silver": {
+    "loanDays": 35,
+    "maxLoans": 6,
+    "graceDays": 5,
+    "finePerDay": 20,
+    "fineCap": 500
+  },
+  "student-gold": {
+    "loanDays": 42,
+    "maxLoans": 7,
+    "graceDays": 3,
+    "finePerDay": 25,
+    "fineCap": 600
+  },
+  "student-platinum": {
+    "loanDays": 21,
+    "maxLoans": 7,
+    "graceDays": 4,
+    "finePerDay": 30,
+    "fineCap": 700
+  },
+  "student-branch": {
+    "loanDays": 28,
+    "maxLoans": 7,
+    "graceDays": 5,
+    "finePerDay": 35,
+    "fineCap": 800
+  },
+  "student-remote": {
+    "loanDays": 35,
+    "maxLoans": 8,
+    "graceDays": 3,
+    "finePerDay": 40,
+    "fineCap": 900
+  },
+  "student-family": {
+    "loanDays": 42,
+    "maxLoans": 8,
+    "graceDays": 4,
+    "finePerDay": 45,
+    "fineCap": 1000
+  },
+  "student-trial": {
+    "loanDays": 21,
+    "maxLoans": 8,
+    "graceDays": 5,
+    "finePerDay": 50,
+    "fineCap": 1100
+  },
+  "student-honorary": {
+    "loanDays": 28,
+    "maxLoans": 9,
+    "graceDays": 3,
+    "finePerDay": 55,
+    "fineCap": 1200
+  },
+  "staff-basic": {
+    "loanDays": 28,
+    "maxLoans": 10,
+    "graceDays": 5,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-plus": {
+    "loanDays": 35,
+    "maxLoans": 10,
+    "graceDays": 6,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-silver": {
+    "loanDays": 42,
+    "maxLoans": 10,
+    "graceDays": 7,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-gold": {
+    "loanDays": 49,
+    "maxLoans": 11,
+    "graceDays": 5,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-platinum": {
+    "loanDays": 28,
+    "maxLoans": 11,
+    "graceDays": 6,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-branch": {
+    "loanDays": 35,
+    "maxLoans": 11,
+    "graceDays": 7,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-remote": {
+    "loanDays": 42,
+    "maxLoans": 12,
+    "graceDays": 5,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-family": {
+    "loanDays": 49,
+    "maxLoans": 12,
+    "graceDays": 6,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-trial": {
+    "loanDays": 28,
+    "maxLoans": 12,
+    "graceDays": 7,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "staff-honorary": {
+    "loanDays": 35,
+    "maxLoans": 13,
+    "graceDays": 5,
+    "finePerDay": 0,
+    "fineCap": 0
+  },
+  "senior-basic": {
+    "loanDays": 21,
+    "maxLoans": 5,
+    "graceDays": 4,
+    "finePerDay": 5,
+    "fineCap": 200
+  },
+  "senior-plus": {
+    "loanDays": 28,
+    "maxLoans": 5,
+    "graceDays": 5,
+    "finePerDay": 10,
+    "fineCap": 300
+  },
+  "senior-silver": {
+    "loanDays": 35,
+    "maxLoans": 5,
+    "graceDays": 6,
+    "finePerDay": 15,
+    "fineCap": 400
+  },
+  "senior-gold": {
+    "loanDays": 42,
+    "maxLoans": 6,
+    "graceDays": 4,
+    "finePerDay": 20,
+    "fineCap": 500
+  },
+  "senior-platinum": {
+    "loanDays": 21,
+    "maxLoans": 6,
+    "graceDays": 5,
+    "finePerDay": 25,
+    "fineCap": 600
+  },
+  "senior-branch": {
+    "loanDays": 28,
+    "maxLoans": 6,
+    "graceDays": 6,
+    "finePerDay": 30,
+    "fineCap": 700
+  },
+  "senior-remote": {
+    "loanDays": 35,
+    "maxLoans": 7,
+    "graceDays": 4,
+    "finePerDay": 35,
+    "fineCap": 800
+  },
+  "senior-family": {
+    "loanDays": 42,
+    "maxLoans": 7,
+    "graceDays": 5,
+    "finePerDay": 40,
+    "fineCap": 900
+  },
+  "senior-trial": {
+    "loanDays": 21,
+    "maxLoans": 7,
+    "graceDays": 6,
+    "finePerDay": 45,
+    "fineCap": 1000
+  },
+  "senior-honorary": {
+    "loanDays": 28,
+    "maxLoans": 8,
+    "graceDays": 4,
+    "finePerDay": 50,
+    "fineCap": 1100
+  },
+  "child-basic": {
+    "loanDays": 7,
+    "maxLoans": 2,
+    "graceDays": 0,
+    "finePerDay": 10,
+    "fineCap": 100
+  },
+  "child-plus": {
+    "loanDays": 14,
+    "maxLoans": 2,
+    "graceDays": 1,
+    "finePerDay": 15,
+    "fineCap": 200
+  },
+  "child-silver": {
+    "loanDays": 21,
+    "maxLoans": 2,
+    "graceDays": 2,
+    "finePerDay": 20,
+    "fineCap": 300
+  },
+  "child-gold": {
+    "loanDays": 28,
+    "maxLoans": 3,
+    "graceDays": 0,
+    "finePerDay": 25,
+    "fineCap": 400
+  },
+  "child-platinum": {
+    "loanDays": 7,
+    "maxLoans": 3,
+    "graceDays": 1,
+    "finePerDay": 30,
+    "fineCap": 500
+  },
+  "child-branch": {
+    "loanDays": 14,
+    "maxLoans": 3,
+    "graceDays": 2,
+    "finePerDay": 35,
+    "fineCap": 600
+  },
+  "child-remote": {
+    "loanDays": 21,
+    "maxLoans": 4,
+    "graceDays": 0,
+    "finePerDay": 40,
+    "fineCap": 700
+  },
+  "child-family": {
+    "loanDays": 28,
+    "maxLoans": 4,
+    "graceDays": 1,
+    "finePerDay": 45,
+    "fineCap": 800
+  },
+  "child-trial": {
+    "loanDays": 7,
+    "maxLoans": 4,
+    "graceDays": 2,
+    "finePerDay": 50,
+    "fineCap": 900
+  },
+  "child-honorary": {
+    "loanDays": 14,
+    "maxLoans": 5,
+    "graceDays": 0,
+    "finePerDay": 55,
+    "fineCap": 1000
+  },
+  "scholar-basic": {
+    "loanDays": 42,
+    "maxLoans": 12,
+    "graceDays": 7,
+    "finePerDay": 50,
+    "fineCap": 2000
+  },
+  "scholar-plus": {
+    "loanDays": 49,
+    "maxLoans": 12,
+    "graceDays": 8,
+    "finePerDay": 55,
+    "fineCap": 2100
+  },
+  "scholar-silver": {
+    "loanDays": 56,
+    "maxLoans": 12,
+    "graceDays": 9,
+    "finePerDay": 60,
+    "fineCap": 2200
+  },
+  "scholar-gold": {
+    "loanDays": 63,
+    "maxLoans": 13,
+    "graceDays": 7,
+    "finePerDay": 65,
+    "fineCap": 2300
+  },
+  "scholar-platinum": {
+    "loanDays": 42,
+    "maxLoans": 13,
+    "graceDays": 8,
+    "finePerDay": 70,
+    "fineCap": 2400
+  },
+  "scholar-branch": {
+    "loanDays": 49,
+    "maxLoans": 13,
+    "graceDays": 9,
+    "finePerDay": 75,
+    "fineCap": 2500
+  },
+  "scholar-remote": {
+    "loanDays": 56,
+    "maxLoans": 14,
+    "graceDays": 7,
+    "finePerDay": 80,
+    "fineCap": 2600
+  },
+  "scholar-family": {
+    "loanDays": 63,
+    "maxLoans": 14,
+    "graceDays": 8,
+    "finePerDay": 85,
+    "fineCap": 2700
+  },
+  "scholar-trial": {
+    "loanDays": 42,
+    "maxLoans": 14,
+    "graceDays": 9,
+    "finePerDay": 90,
+    "fineCap": 2800
+  },
+  "scholar-honorary": {
+    "loanDays": 49,
+    "maxLoans": 15,
+    "graceDays": 7,
+    "finePerDay": 95,
+    "fineCap": 2900
+  }
+}
