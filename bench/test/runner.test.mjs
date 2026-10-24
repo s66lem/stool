@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { claudeArgs, overBudget, parseResult, planRuns, stoolLoaded } from '../lib/runner.mjs'
+import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns, stoolLoaded } from '../lib/runner.mjs'
 
 const tasks = [
   { id: 's1', size: 'small' },
@@ -48,4 +48,25 @@ test('stoolLoaded spots the stool hooks module in a debug log', () => {
 test('overBudget', () => {
   assert.equal(overBudget(49, 2, 50), true)
   assert.equal(overBudget(40, 5, 50), false)
+})
+
+test('claudeArgs pins the session id, so a run that dies early can still be priced', () => {
+  const a = claudeArgs('off', { prompt: 'x', model: 'sonnet', stoolDir: '/s', debugFile: '/d', sessionId: '11111111-2222-3333-4444-555555555555' })
+  assert.equal(a[a.indexOf('--session-id') + 1], '11111111-2222-3333-4444-555555555555')
+})
+
+test('estimateFor uses earlier runs of the same task, else the task\'s own estimate', () => {
+  const runs = [{ task: 's1', usd: 0.4 }, { task: 's1', usd: 0.6 }]
+  assert.equal(estimateFor({ id: 's1', estimateUsd: 9 }, runs), 0.5)
+  assert.equal(estimateFor({ id: 'L', estimateUsd: 9 }, runs), 9)
+  assert.equal(estimateFor({ id: 'L' }, runs), 0.5)
+})
+
+test('invalidReason: wrong hooks are invalid; a missing debug log is not (the run just failed)', () => {
+  const stool = 'hooks module stool@inline loaded (worker)'
+  assert.equal(invalidReason('off', stool), 'stool hooks in an off run')
+  assert.equal(invalidReason('on', 'hooks module cc-plugin-diff@builtin loaded'), 'stool hooks missing in an on run')
+  assert.equal(invalidReason('on', stool), undefined)
+  assert.equal(invalidReason('on', null), undefined)
+  assert.equal(invalidReason('off', null), undefined)
 })

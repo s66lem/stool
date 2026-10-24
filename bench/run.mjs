@@ -5,13 +5,14 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { sessionCost } from './lib/cost.mjs'
 import { score, verdict } from './lib/score.mjs'
 import { runCheck } from './lib/check.mjs'
-import { claudeArgs, overBudget, parseResult, planRuns, stoolLoaded } from './lib/runner.mjs'
+import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns } from './lib/runner.mjs'
 
 const BENCH = fileURLToPath(new URL('.', import.meta.url))
 const USAGE = `node bench/run.mjs --mode smoke|full [--model sonnet] [--budget-usd 50] [--rate 0.075] [--stool <dir>] [--out <file>] [--timeout-min 30] [--keep]
@@ -72,32 +73,40 @@ const runs = []
 let stoppedAtBudget = false
 for (const r of planRuns(o.mode, tasks)) {
   const task = tasks.find(t => t.id === r.task)
-  const same = runs.filter(x => x.task === r.task)
-  const estimate = (same.length ? same : runs).reduce((s, x) => s + x.usd, 0) / Math.max(1, (same.length ? same : runs).length)
-  if (overBudget(spent, estimate, budget)) {
+  if (overBudget(spent, estimateFor(task, runs), budget)) {
     stoppedAtBudget = true
     break
   }
   const dir = freshCopy(`${r.task}-${r.setup}`)
   const debugFile = join(dir, '..', `${dir.split(/[\\/]/).pop()}.debug.txt`)
+  const sessionId = randomUUID()
   const started = Date.now()
-  const p = spawnSync('claude', claudeArgs(r.setup, { prompt: task.prompt, model: o.model, stoolDir: o.stool, debugFile }), {
-    cwd: dir,
-    env,
-    encoding: 'utf8',
-    timeout: Number(o['timeout-min']) * 60_000,
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  const res = parseResult(p.stdout ?? '')
-  const cost = res ? sessionCost(projects, res.sessionId) : { usd: 0, msgs: 0, leadMaxCtx: 0, agentMaxCtx: 0, agents: 0 }
-  const pass = !!res && !res.isError && runCheck(dir, join(BENCH, 'checks', task.check))
-  const debug = existsSync(debugFile) ? readFileSync(debugFile, 'utf8') : ''
-  const loaded = stoolLoaded(debug)
-  const invalid = r.setup === 'off' && loaded ? 'stool hooks in an off run' : r.setup === 'on' && !loaded ? 'stool hooks missing in an on run' : undefined
-  const run = { ...r, usd: cost.usd, pass, invalid, msgs: cost.msgs, agents: cost.agents, leadMaxCtx: cost.leadMaxCtx, agentMaxCtx: cost.agentMaxCtx, minutes: (Date.now() - started) / 60_000, timedOut: p.error?.code === 'ETIMEDOUT' }
-  runs.push(run)
-  spent += run.usd
-  console.error(`${r.task} ${r.setup} #${r.rep}: ${pass ? 'pass' : 'FAIL'} $${run.usd.toFixed(2)} ${run.msgs} msgs, lead ctx ${run.leadMaxCtx}, agent ctx ${run.agentMaxCtx}${invalid ? ` INVALID (${invalid})` : ''}${run.timedOut ? ' TIMED OUT' : ''}${o.keep ? ` ${dir}` : ''}`)
+  // one run's error must not lose the runs already paid for: it is recorded as a failed run and the batch goes on
+  try {
+    const p = spawnSync('claude', claudeArgs(r.setup, { prompt: task.prompt, model: o.model, stoolDir: o.stool, debugFile, sessionId }), {
+      cwd: dir,
+      env,
+      encoding: 'utf8',
+      timeout: Number(o['timeout-min']) * 60_000,
+      maxBuffer: 64 * 1024 * 1024,
+    })
+    const res = parseResult(p.stdout ?? '')
+    const cost = sessionCost(projects, sessionId)
+    const pass = !!res && !res.isError && runCheck(dir, join(BENCH, 'checks', task.check))
+    const invalid = invalidReason(r.setup, existsSync(debugFile) ? readFileSync(debugFile, 'utf8') : null)
+    const run = { ...r, usd: cost.usd, pass, invalid, msgs: cost.msgs, agents: cost.agents, leadMaxCtx: cost.leadMaxCtx, agentMaxCtx: cost.agentMaxCtx, minutes: (Date.now() - started) / 60_000, timedOut: p.error?.code === 'ETIMEDOUT' }
+    runs.push(run)
+    spent += run.usd
+    console.error(`${r.task} ${r.setup} #${r.rep}: ${pass ? 'pass' : 'FAIL'} $${run.usd.toFixed(2)} ${run.msgs} msgs, lead ctx ${run.leadMaxCtx}, agent ctx ${run.agentMaxCtx}${invalid ? ` INVALID (${invalid})` : ''}${run.timedOut ? ' TIMED OUT' : ''}${o.keep ? ` ${dir}` : ''}`)
+  } catch (e) {
+    let usd = 0
+    try {
+      usd = sessionCost(projects, sessionId).usd
+    } catch {}
+    runs.push({ ...r, usd, pass: false, error: String(e?.message ?? e) })
+    spent += usd
+    console.error(`${r.task} ${r.setup} #${r.rep}: ERROR ${e?.message ?? e}`)
+  }
   if (!o.keep) rmSync(dir, { recursive: true, force: true })
   rmSync(debugFile, { force: true })
 }

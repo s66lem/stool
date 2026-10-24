@@ -16,7 +16,11 @@ export function score(runs) {
 }
 
 // real = on is cheaper per pass than off by more than off's spread (max - min of its runs) on more than half the tasks
+// totals and per-task savings use only tasks with valid runs in both setups (a budget stop or an invalid run can
+// leave a task on one side, which would skew the totals)
 export function verdict(rows, runs) {
+  const paired = new Set(rows.filter(r => r.setup === 'off').map(r => r.task).filter(t => rows.some(r => r.task === t && r.setup === 'on')))
+  rows = rows.filter(r => paired.has(r.task))
   const total = setup => {
     const rs = rows.filter(r => r.setup === setup)
     const passes = rs.reduce((s, r) => s + r.passes, 0)

@@ -12,8 +12,9 @@ export function planRuns(mode, tasks) {
 }
 
 // a clean profile both ways (no MCP servers, no user or project settings, so no other plugins); stool only when on
-export function claudeArgs(setup, { prompt, model, stoolDir, debugFile }) {
-  const args = ['-p', prompt, '--model', model, '--output-format', 'json', '--strict-mcp-config', '--setting-sources', '', '--dangerously-skip-permissions', '--debug-file', debugFile]
+// a pinned session id lets a run that times out or crashes (no result printed) still be priced from its transcript
+export function claudeArgs(setup, { prompt, model, stoolDir, debugFile, sessionId }) {
+  const args = ['-p', prompt, '--model', model, '--output-format', 'json', '--strict-mcp-config', '--setting-sources', '', '--dangerously-skip-permissions', '--debug-file', debugFile, ...(sessionId ? ['--session-id', sessionId] : [])]
   return setup === 'on' ? [...args, '--plugin-dir', stoolDir] : args
 }
 
@@ -31,3 +32,21 @@ export function parseResult(stdout) {
 export const stoolLoaded = debugText => /hooks module stool@\S+ loaded/.test(debugText)
 
 export const overBudget = (spentUsd, nextEstimateUsd, budgetUsd) => spentUsd + nextEstimateUsd > budgetUsd
+
+// the next run's cost guess for the budget stop: earlier runs of the task, else its own estimate, else all runs so far
+export function estimateFor(task, runs) {
+  const mean = xs => xs.reduce((s, r) => s + r.usd, 0) / xs.length
+  const same = runs.filter(r => r.task === task.id)
+  if (same.length) return mean(same)
+  if (typeof task.estimateUsd === 'number') return task.estimateUsd
+  return runs.length ? mean(runs) : 0
+}
+
+// no debug log (claude died at start) is a failed run, not an invalid one: dropping it would hide a crash stool caused
+export function invalidReason(setup, debugText) {
+  if (debugText === null) return undefined
+  const loaded = stoolLoaded(debugText)
+  if (setup === 'off' && loaded) return 'stool hooks in an off run'
+  if (setup === 'on' && !loaded) return 'stool hooks missing in an on run'
+  return undefined
+}

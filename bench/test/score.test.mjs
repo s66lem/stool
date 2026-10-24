@@ -39,3 +39,11 @@ test('a saving on only half the tasks is within noise', () => {
   const all = [...runs('A', 'off', [1.0, 1.2]), ...runs('A', 'on', [0.5, 0.5]), ...runs('B', 'off', [2.0, 2.1]), ...runs('B', 'on', [2.0, 2.2])]
   assert.equal(verdict(score(all), all).real, false)
 })
+
+test('totals only use tasks that have valid runs in both setups', () => {
+  const all = [...runs('A', 'off', [1.0]), ...runs('A', 'on', [0.5]), ...runs('L', 'off', [10])]
+  const v = verdict(score(all), all)
+  near(v.totalOff, 1.0)
+  near(v.totalOn, 0.5)
+  assert.deepEqual(v.perTask.map(t => t.task), ['A'])
+})
