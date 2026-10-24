@@ -137,7 +137,7 @@ Plugin state (`$.state`, plugin `stool`): `plans`, `isOpen`, `tick`, `speed`, `p
 
 ## Tests
 
-`claude plugin validate .` and `claude plugin test .` (a combined smoke test); `node tests/run-specs.mjs` runs each part's `hooks/<part>/register.spec.ts` alone; the progress bars' offline suite is described in `tests/plan-progress/README.md`.
+`claude plugin validate .` and `claude plugin test .` (a combined smoke test); `node tests/run-specs.mjs` runs each part's `hooks/<part>/register.spec.ts` alone; the progress bars' offline suite is described in `tests/plan-progress/README.md`. The cost bench (stool off vs on over fixed tasks, cost per passed task) is in `bench/README.md`.
 
 ## Notes
 

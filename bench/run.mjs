@@ -47,8 +47,28 @@ const projects = join(homedir(), '.claude', 'projects')
 const { CLAUDE_CODE_PLUGIN_DIRS, CLAUDE_CODE_PLUGIN_DIR_WATCH, ...env } = process.env
 const git = (dir, ...a) => spawnSync('git', ['-c', 'user.name=bench', '-c', 'user.email=bench@example.invalid', ...a], { cwd: dir })
 
-const runs = []
+function freshCopy(name) {
+  const dir = mkdtempSync(join(tmpdir(), `bench-${name}-`))
+  cpSync(join(BENCH, 'fixture'), dir, { recursive: true })
+  git(dir, 'init', '-q')
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-q', '-m', 'fixture')
+  return dir
+}
+
 let spent = 0
+// One unscored call per setup first. stool adds tools, so the two setups have different prompt prefixes; whichever
+// prefix another session cached lately would start warm and the other cold (~$0.15 of cache writes on the first run).
+for (const setup of ['off', 'on']) {
+  const dir = freshCopy(`warm-${setup}`)
+  const p = spawnSync('claude', claudeArgs(setup, { prompt: 'Reply with the word ok.', model: o.model, stoolDir: o.stool, debugFile: join(dir, '.warm-debug.txt') }), { cwd: dir, env, encoding: 'utf8', timeout: 300_000 })
+  const res = parseResult(p.stdout ?? '')
+  if (res) spent += sessionCost(projects, res.sessionId).usd
+  rmSync(dir, { recursive: true, force: true })
+}
+console.error(`warm-up: $${spent.toFixed(2)}`)
+
+const runs = []
 let stoppedAtBudget = false
 for (const r of planRuns(o.mode, tasks)) {
   const task = tasks.find(t => t.id === r.task)
@@ -58,11 +78,7 @@ for (const r of planRuns(o.mode, tasks)) {
     stoppedAtBudget = true
     break
   }
-  const dir = mkdtempSync(join(tmpdir(), `bench-${r.task}-${r.setup}-`))
-  cpSync(join(BENCH, 'fixture'), dir, { recursive: true })
-  git(dir, 'init', '-q')
-  git(dir, 'add', '-A')
-  git(dir, 'commit', '-q', '-m', 'fixture')
+  const dir = freshCopy(`${r.task}-${r.setup}`)
   const debugFile = join(dir, '..', `${dir.split(/[\\/]/).pop()}.debug.txt`)
   const started = Date.now()
   const p = spawnSync('claude', claudeArgs(r.setup, { prompt: task.prompt, model: o.model, stoolDir: o.stool, debugFile }), {
