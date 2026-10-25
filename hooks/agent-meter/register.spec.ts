@@ -12,7 +12,7 @@ const IN = 'C:/Users/dev/work/app'
 
 function world(on: On, cwd = IN) {
   mock.clock(on, { now: 10 * 3600_000 })
-  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0, prompt: '', pct: 10, store: {} as Record<string, unknown> }
+  const w = { file: undefined as string | undefined, toasts: [] as string[], strip: undefined as unknown, n: 0, prompt: '', toolResult: '' as unknown, pct: 10, store: {} as Record<string, unknown> }
   on('session.cwd', () => ({ value: cwd }))
   on('fs.read', () => {
     if (w.file === undefined) throw new Error('ENOENT')
@@ -20,10 +20,11 @@ function world(on: On, cwd = IN) {
   })
   on('fs.write', (_$, e) => { w.file = e.text; return { value: undefined } })
   on('agent.spawn', (_$, e) => { w.prompt = e.prompt; return { model: 'claude-sonnet-5-5', agentId: 'a' + ++w.n } })
-  on('tool.call', () => ({ result: '' }) as never)
+  on('tool.call', () => ({ result: w.toolResult }) as never)
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('state.set', (_$, e: any) => { w.strip = e.value; return { value: undefined } as never })
   on('session.id', () => ({ value: 's1' }) as never)
+  on('env.get', () => ({ value: 'C:/Users/dev' }) as never)
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1, percent: 0 }, rateLimits: [{ kind: 'seven_day', percentUsed: w.pct, resetsAt: '1970-01-08T00:00:00Z' }] } }) as never)
   on('store.get', (_$, e: any) => ({ value: w.store[e.key] }) as never)
   on('store.set', (_$, e: any) => { w.store[e.key] = e.value; return { value: undefined } as never })
@@ -130,7 +131,20 @@ test('no stated cap: the default is told to the agent, noted past it, and tools 
   expect(w.prompt).toContain('Tool-call cap: about 4')
   const call = () => $.tool.call({ tool: 'Read', input: {}, agentId: 'a1' } as never) as Promise<{ deny?: string; context?: string[] }>
   for (let i = 0; i < 4; i++) expect((await call()).context).toBeUndefined()
-  expect(String((await call()).context)).toContain('past your 4 tool-call cap')
+  const note = String((await call()).context)
+  expect(note).toContain('past your 4 tool-call cap')
+  expect(note).toContain('relay/a1.md')
+  expect(note).toContain('RELAY:')
   for (let i = 0; i < 9; i++) await call() // calls 6..14 = hard limit 14
   expect((await call()).deny).toContain('limit reached')
+})
+
+test('an agent result that relays tells the lead to continue with a fresh agent reading the handoff', OPT, async ($, on) => {
+  const w = world(on)
+  w.toolResult = 'Did half of it.\nRELAY: C:/Users/dev/.claude/stool/relay/a7.md'
+  const r = (await $.tool.call({ tool: 'Agent', input: {} } as never)) as { context?: string[] }
+  expect(String(r.context)).toContain('fresh agent')
+  expect(String(r.context)).toContain('C:/Users/dev/.claude/stool/relay/a7.md')
+  w.toolResult = 'All done.'
+  expect(((await $.tool.call({ tool: 'Agent', input: {} } as never)) as { context?: string[] }).context).toBeUndefined()
 })

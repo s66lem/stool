@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -146,7 +146,7 @@
     "agentCallCap": {
       "type": "number",
       "title": "Agent tool-call cap",
-      "description": "Tool calls an agent gets when its prompt states no cap (0 = off). It is told to stop and report there, and its tools stop a quarter past it",
+      "description": "Tool calls an agent gets when its prompt states no cap (0 = off). Past it, an unfinished agent writes a handoff and the lead continues in a fresh agent (relay); its tools stop a quarter past it",
       "default": 80,
       "min": 0
     },

@@ -23,7 +23,7 @@ export const RESTART_TOOL: ToolSpec = {
       model: { type: 'string', description: 'Optional; model alias or id ("sonnet", "opus", "claude-sonnet-5-5") to switch to before the prompt' },
     },
   },
-  isDeferred: false,
+  isDeferred: true,
 }
 
 export const RELOAD_TOOL: ToolSpec = {
@@ -31,7 +31,7 @@ export const RELOAD_TOOL: ToolSpec = {
   description:
     'Runs /reload-plugins --force in this session once the current turn ends, so edited mods are loaded without the user typing the command (it cannot be typed over Remote Control). Call it only when the user asked for a reload or for a mod change to take effect.',
   inputSchema: { type: 'object', properties: {} },
-  isDeferred: false,
+  isDeferred: true,
 }
 
 export const register: Register = on => {

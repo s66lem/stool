@@ -167,7 +167,7 @@ export const AGENT_CAP_TOOL: ToolSpec = {
   description:
     'How many agents to run in parallel right now, from the pace of the 5-hour and weekly usage windows. Call it before dispatching a batch of agents; the cap governs new dispatches only.',
   inputSchema: { type: 'object', properties: {} },
-  isDeferred: false,
+  isDeferred: true,
 }
 
 export const register: Register = (on, options) => {

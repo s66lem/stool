@@ -114,7 +114,7 @@ export const KEEP_WARM_TOOL: ToolSpec = {
   description:
     "Turn this session's idle cache warming off or on. Call it only after the user has answered, in chat, whether keep-warm should be turned off (for example when they hand this session's work off to a new session).",
   inputSchema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
-  isDeferred: false,
+  isDeferred: true,
 }
 
 export const register: Register = (on, options) => {

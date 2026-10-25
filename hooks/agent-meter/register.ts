@@ -83,6 +83,13 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: /[^]*|a{2}/ }, async ($, e, next) => {
+    // relay, lead side: an agent that ran out of calls left a handoff; the work goes on in a fresh agent, whose
+    // context starts small instead of carrying everything the first one read
+    if (!e.agentId && (e.tool === 'Agent' || e.tool === 'Task')) {
+      const r = await next(e)
+      const handoff = /RELAY:\s*(\S+)/.exec(JSON.stringify(r.result ?? ''))?.[1]?.replace(/\\\\/g, '\\')
+      return handoff ? { ...r, context: [...(r.context ?? []), `agent-meter: that agent relayed at its tool-call cap. If the task is not finished, dispatch a fresh agent of the same type to continue it: give it the original task and tell it to read the handoff at ${handoff} first.`] } : r
+    }
     const m = e.agentId ? meters.get(e.agentId) : undefined
     if (!m) return next(e)
     m.calls++
@@ -92,7 +99,15 @@ export const register: Register = (on, options) => {
     if (m.cap === undefined || m.calls <= m.cap || m.warned) return r
     m.warned = true
     $.ui.toast(`agent-meter: "${m.description}" passed its cap (${m.calls}/${m.cap} tool calls)`)
-    return { ...r, context: [...(r.context ?? []), `agent-meter: you are past your ${m.cap} tool-call cap; wrap up and report now (tools stop at ${hardOf(m.cap)}).`] }
+    // relay, agent side: a short handoff file instead of a half-done stop, so a fresh agent can pick up from it
+    const handoff = expand((await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME')), `~/.claude/stool/relay/${e.agentId}.md`)
+    return {
+      ...r,
+      context: [
+        ...(r.context ?? []),
+        `agent-meter: you are past your ${m.cap} tool-call cap (tools stop at ${hardOf(m.cap)}). If the task is not finished, write a short handoff to ${handoff} (done so far, what is left, files touched, the next step), then end your report with the line "RELAY: ${handoff}". If it is finished, just report.`,
+      ],
+    }
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', { reason: /[^]*|a{3}/ }, async ($, e, next) => {
