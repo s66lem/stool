@@ -2,13 +2,29 @@
 
 const SETUPS = ['off', 'on']
 
+// smoke / swe-smoke: the first small task / SWE-bench instance once per setup; small: the small tasks twice per setup;
+// full: every SWE-bench instance and the long task once per setup
 export function planRuns(mode, tasks) {
-  const small = tasks.filter(t => t.size === 'small')
-  if (mode === 'smoke') return SETUPS.map(setup => ({ task: small[0].id, setup, rep: 1 }))
-  const runs = []
-  for (const t of small) for (const rep of [1, 2]) for (const setup of SETUPS) runs.push({ task: t.id, setup, rep })
-  for (const t of tasks.filter(t => t.size === 'long')) for (const setup of SETUPS) runs.push({ task: t.id, setup, rep: 1 })
-  return runs
+  const of = size => tasks.filter(t => t.size === size)
+  const once = ts => ts.flatMap(t => SETUPS.map(setup => ({ task: t.id, setup, rep: 1 })))
+  if (mode === 'smoke') return once(of('small').slice(0, 1))
+  if (mode === 'swe-smoke') return once(of('swe').slice(0, 1))
+  if (mode === 'small') return of('small').flatMap(t => [1, 2].flatMap(rep => SETUPS.map(setup => ({ task: t.id, setup, rep }))))
+  return once([...of('swe'), ...of('long')])
+}
+
+export const toLinux = p => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/mnt/${d.toLowerCase()}`)
+
+// the task's own instruction, with the repo in the current folder and a way to run commands in its environment
+export function swePrompt(instruction, envCmd) {
+  const text = instruction.replace('A code repository is available in the `/app` directory.', 'A code repository is available in the current directory.')
+  return `${text}
+
+This machine cannot run the project directly. To run any command in the project's environment (tests, builds, scripts), use:
+
+    ${envCmd} '<command>'
+
+It applies your current changes to a copy of the repository at /app inside the environment and runs the command there; output is cut to its last 300 lines. The environment has no network.`
 }
 
 // a clean profile both ways (no MCP servers, no user or project settings, so no other plugins); stool only when on

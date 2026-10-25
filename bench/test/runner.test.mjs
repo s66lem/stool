@@ -1,20 +1,42 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns, stoolLoaded } from '../lib/runner.mjs'
+import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns, stoolLoaded, swePrompt, toLinux } from '../lib/runner.mjs'
 
 const tasks = [
   { id: 's1', size: 'small' },
   { id: 's2', size: 'small' },
   { id: 's3', size: 'small' },
   { id: 'L', size: 'long' },
+  { id: 'w1', size: 'swe' },
+  { id: 'w2', size: 'swe' },
 ]
 
-test('full runs each small task twice and the long one once, per setup, off and on interleaved', () => {
-  const runs = planRuns('full', tasks)
-  assert.equal(runs.length, 3 * 2 * 2 + 2)
+test('small runs each small task twice per setup, off and on interleaved', () => {
+  const runs = planRuns('small', tasks)
+  assert.equal(runs.length, 3 * 2 * 2)
   assert.deepEqual(runs.slice(0, 2), [{ task: 's1', setup: 'off', rep: 1 }, { task: 's1', setup: 'on', rep: 1 }])
-  assert.deepEqual(runs.filter(r => r.task === 'L'), [{ task: 'L', setup: 'off', rep: 1 }, { task: 'L', setup: 'on', rep: 1 }])
+})
+
+test('full runs every SWE-bench instance and the long task once per setup', () => {
+  const runs = planRuns('full', tasks)
+  assert.deepEqual(runs.map(r => `${r.task}:${r.setup}`), ['w1:off', 'w1:on', 'w2:off', 'w2:on', 'L:off', 'L:on'])
+})
+
+test('swe-smoke runs the first SWE-bench instance once per setup', () => {
+  assert.deepEqual(planRuns('swe-smoke', tasks), [{ task: 'w1', setup: 'off', rep: 1 }, { task: 'w1', setup: 'on', rep: 1 }])
+})
+
+test('toLinux maps a Windows path to its WSL mount', () => {
+  assert.equal(toLinux('G:\\bench-work\\r1'), '/mnt/g/bench-work/r1')
+  assert.equal(toLinux('C:/Users/x/stool/bench/swe/swe.sh'), '/mnt/c/Users/x/stool/bench/swe/swe.sh')
+})
+
+test('swePrompt points the agent at the current folder and gives it the environment command', () => {
+  const p = swePrompt('A code repository is available in the `/app` directory. Your task is X.', 'wsl -d bench -- envrun r1')
+  assert.match(p, /^A code repository is available in the current directory\. Your task is X\./)
+  assert.match(p, /wsl -d bench -- envrun r1 '<command>'/)
+  assert.doesNotMatch(p, /`\/app` directory/)
 })
 
 test('smoke runs the first small task once per setup', () => {

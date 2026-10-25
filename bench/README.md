@@ -8,13 +8,17 @@ Measures what stool saves on real work: the same coding tasks, run headless with
 - `checks/`: the hidden tests, copied in only after a run finishes. `solutions/` holds reference solutions; `test/fixture.test.mjs` proves every check fails on the untouched fixture and passes on its solution.
 - Both setups use a clean profile: no MCP servers, no user or project settings (so no other plugins); "on" adds `--plugin-dir` with this repo. A run whose debug log shows the wrong hooks loaded is marked invalid and left out.
 
+- `swe/`: 8 instances of the public SWE-bench Pro set, graded by the benchmark's own tests in Docker (setup in `swe/README.md`).
+
 ## Running
 ```bash
 node bench/run.mjs --mode smoke
 node bench/run.mjs --mode full --out bench-result.md
 ```
-- `smoke`: the first small task once each way, a check of the bench itself (about $1-2 at list price).
-- `full`: small tasks twice each way, the long task once each way (14 runs). It **spends real usage**; `--budget-usd` (default 50) stops it early, and the report says so.
+- `smoke`: the first small task once each way, a check of the bench itself (about $0.25 at list price).
+- `small`: the three small tasks twice each way.
+- `swe-smoke`: one SWE-bench Pro instance once each way.
+- `full`: the 8 SWE-bench Pro instances and the long task, once each way (18 runs). It **spends real usage**; `--budget-usd` (default 50) stops it early, and the report says so.
 - Costs are read from each run's transcripts under `~/.claude/projects` (subagents included) and priced at API list price. `--rate` turns dollars into a weekly-limit percent for your plan.
 
 ## Reading the result

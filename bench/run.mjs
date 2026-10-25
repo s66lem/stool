@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Cost bench: runs the fixed tasks headless with stool off and on, checks each result, prices each run from its
+// Cost bench: runs fixed tasks headless with stool off and on, checks each result, prices each run from its
 // transcripts and reports $ per passed task. Spends real usage: see bench/README.md before running `full`.
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -12,16 +12,21 @@ import { parseArgs } from 'node:util'
 import { sessionCost } from './lib/cost.mjs'
 import { score, verdict } from './lib/score.mjs'
 import { runCheck } from './lib/check.mjs'
-import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns } from './lib/runner.mjs'
+import { claudeArgs, estimateFor, invalidReason, overBudget, parseResult, planRuns, swePrompt, toLinux } from './lib/runner.mjs'
 
 const BENCH = fileURLToPath(new URL('.', import.meta.url))
-const USAGE = `node bench/run.mjs --mode smoke|full [--model sonnet] [--budget-usd 50] [--rate 0.075] [--stool <dir>] [--out <file>] [--timeout-min 30] [--keep]
+const USAGE = `node bench/run.mjs --mode smoke|small|swe-smoke|full [--model sonnet] [--budget-usd 50] [--rate 0.075] [--stool <dir>] [--work <dir>] [--out <file>] [--timeout-min 30] [--keep]
 
-  smoke  the first small task once with stool off and once on (a cheap check of the bench itself)
-  full   3 small tasks x 2 repeats + the long task once, each with stool off and on
-  --rate      weekly-limit percent per list-price dollar, for the w% column
-  --stool     the stool plugin folder for the "on" runs (default: this repo)
-  --keep      keep each run's folder (printed) instead of deleting it`
+  smoke      the first small task once with stool off and once on (a cheap check of the bench itself)
+  small      the 3 small tasks x 2 repeats, each with stool off and on
+  swe-smoke  the first SWE-bench Pro instance once each way
+  full       every SWE-bench Pro instance (bench/swe/instances.json) and the long task once each way
+  --rate     weekly-limit percent per list-price dollar, for the w% column
+  --stool    the stool plugin folder for the "on" runs (default: this repo)
+  --work     where run folders go (default G:/bench-work when it exists, else the temp folder)
+  --keep     keep each run's folder (printed) instead of deleting it
+
+SWE-bench Pro runs need the "bench" WSL distro with Docker and the harness at /root/SWE-bench_Pro-os (bench/swe/README.md).`
 
 const { values: o } = parseArgs({
   options: {
@@ -30,31 +35,61 @@ const { values: o } = parseArgs({
     'budget-usd': { type: 'string', default: '50' },
     rate: { type: 'string', default: '0.075' },
     stool: { type: 'string', default: join(BENCH, '..') },
+    work: { type: 'string', default: existsSync('G:/') ? 'G:/bench-work' : tmpdir() },
     out: { type: 'string' },
     'timeout-min': { type: 'string', default: '30' },
     keep: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
 })
-if (o.help || !['smoke', 'full'].includes(o.mode)) {
+if (o.help || !['smoke', 'small', 'swe-smoke', 'full'].includes(o.mode)) {
   console.log(USAGE)
   process.exit(o.help ? 0 : 1)
 }
 
-const tasks = JSON.parse(readFileSync(join(BENCH, 'tasks.json'), 'utf8'))
+const SWE_SH = toLinux(join(BENCH, 'swe', 'swe.sh'))
+const SWE_TASKS = '/root/SWE-bench_Pro-os/v2/tasks'
+const sweList = existsSync(join(BENCH, 'swe', 'instances.json')) ? JSON.parse(readFileSync(join(BENCH, 'swe', 'instances.json'), 'utf8')) : []
+const tasks = [
+  ...JSON.parse(readFileSync(join(BENCH, 'tasks.json'), 'utf8')),
+  ...sweList.map(x => ({ ...x, size: 'swe', estimateUsd: 2.5 })),
+]
 const budget = Number(o['budget-usd'])
 const projects = join(homedir(), '.claude', 'projects')
 // the "off" run must not inherit a plugin folder from the caller's environment
 const { CLAUDE_CODE_PLUGIN_DIRS, CLAUDE_CODE_PLUGIN_DIR_WATCH, ...env } = process.env
-const git = (dir, ...a) => spawnSync('git', ['-c', 'user.name=bench', '-c', 'user.email=bench@example.invalid', ...a], { cwd: dir })
+const git = (dir, ...a) => spawnSync('git', ['-c', 'user.name=bench', '-c', 'user.email=bench@example.invalid', '-c', 'core.autocrlf=false', ...a], { cwd: dir })
+const wsl = (args, timeoutMs = 3_600_000) => spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'bash', SWE_SH, ...args], { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 })
+mkdirSync(o.work, { recursive: true })
 
-function freshCopy(name) {
-  const dir = mkdtempSync(join(tmpdir(), `bench-${name}-`))
-  cpSync(join(BENCH, 'fixture'), dir, { recursive: true })
+function commitAll(dir) {
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
-  git(dir, 'commit', '-q', '-m', 'fixture')
+  git(dir, 'commit', '-q', '-m', 'base')
   return dir
+}
+
+function freshCopy(name) {
+  const dir = mkdtempSync(join(o.work, `bench-${name}-`))
+  cpSync(join(BENCH, 'fixture'), dir, { recursive: true })
+  return commitAll(dir)
+}
+
+// the run's folder and prompt; a SWE-bench instance also gets its container (see swe.sh)
+function prepare(task, runId) {
+  if (task.size !== 'swe') return { dir: freshCopy(runId), prompt: task.prompt }
+  const dir = join(o.work, runId)
+  const p = wsl(['prepare', task.id, task.image, task.base_commit, toLinux(dir)])
+  if (p.status !== 0 || !existsSync(dir)) throw new Error(`prepare failed: ${(p.stderr ?? '').trim().slice(-300)}`)
+  commitAll(dir)
+  const instruction = spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'cat', `${SWE_TASKS}/${task.id}/instruction.md`], { encoding: 'utf8' }).stdout
+  if (!instruction) throw new Error('no instruction.md')
+  return { dir, prompt: swePrompt(instruction, `wsl -d bench -u root -- bash ${SWE_SH} envrun ${runId} ${toLinux(dir)}`) }
+}
+
+function check(task, dir) {
+  if (task.size !== 'swe') return runCheck(dir, join(BENCH, 'checks', task.check))
+  return /REWARD=1/.test(wsl(['grade', task.id, task.image, toLinux(dir)]).stdout ?? '')
 }
 
 let spent = 0
@@ -69,21 +104,25 @@ for (const setup of ['off', 'on']) {
 }
 console.error(`warm-up: $${spent.toFixed(2)}`)
 
+const plan = planRuns(o.mode, tasks)
 const runs = []
 let stoppedAtBudget = false
-for (const r of planRuns(o.mode, tasks)) {
+for (const [i, r] of plan.entries()) {
   const task = tasks.find(t => t.id === r.task)
   if (overBudget(spent, estimateFor(task, runs), budget)) {
     stoppedAtBudget = true
     break
   }
-  const dir = freshCopy(`${r.task}-${r.setup}`)
-  const debugFile = join(dir, '..', `${dir.split(/[\\/]/).pop()}.debug.txt`)
+  const runId = `${(task.repo ?? task.id).replace(/\W+/g, '-').slice(0, 24)}-${r.setup}-${r.rep}-${Date.now().toString(36)}`
+  const debugFile = join(o.work, `${runId}.debug.txt`)
   const sessionId = randomUUID()
   const started = Date.now()
+  let dir
   // one run's error must not lose the runs already paid for: it is recorded as a failed run and the batch goes on
   try {
-    const p = spawnSync('claude', claudeArgs(r.setup, { prompt: task.prompt, model: o.model, stoolDir: o.stool, debugFile, sessionId }), {
+    const prep = prepare(task, runId)
+    dir = prep.dir
+    const p = spawnSync('claude', claudeArgs(r.setup, { prompt: prep.prompt, model: o.model, stoolDir: o.stool, debugFile, sessionId }), {
       cwd: dir,
       env,
       encoding: 'utf8',
@@ -92,12 +131,12 @@ for (const r of planRuns(o.mode, tasks)) {
     })
     const res = parseResult(p.stdout ?? '')
     const cost = sessionCost(projects, sessionId)
-    const pass = !!res && !res.isError && runCheck(dir, join(BENCH, 'checks', task.check))
+    const pass = !!res && !res.isError && check(task, dir)
     const invalid = invalidReason(r.setup, existsSync(debugFile) ? readFileSync(debugFile, 'utf8') : null)
     const run = { ...r, usd: cost.usd, pass, invalid, msgs: cost.msgs, agents: cost.agents, leadMaxCtx: cost.leadMaxCtx, agentMaxCtx: cost.agentMaxCtx, minutes: (Date.now() - started) / 60_000, timedOut: p.error?.code === 'ETIMEDOUT' }
     runs.push(run)
     spent += run.usd
-    console.error(`${r.task} ${r.setup} #${r.rep}: ${pass ? 'pass' : 'FAIL'} $${run.usd.toFixed(2)} ${run.msgs} msgs, lead ctx ${run.leadMaxCtx}, agent ctx ${run.agentMaxCtx}${invalid ? ` INVALID (${invalid})` : ''}${run.timedOut ? ' TIMED OUT' : ''}${o.keep ? ` ${dir}` : ''}`)
+    console.error(`${r.task.slice(0, 60)} ${r.setup} #${r.rep}: ${pass ? 'pass' : 'FAIL'} $${run.usd.toFixed(2)} ${run.msgs} msgs, lead ctx ${run.leadMaxCtx}, agent ctx ${run.agentMaxCtx}, ${run.minutes.toFixed(0)} min${invalid ? ` INVALID (${invalid})` : ''}${run.timedOut ? ' TIMED OUT' : ''}${o.keep ? ` ${dir}` : ''}`)
   } catch (e) {
     let usd = 0
     try {
@@ -105,9 +144,14 @@ for (const r of planRuns(o.mode, tasks)) {
     } catch {}
     runs.push({ ...r, usd, pass: false, error: String(e?.message ?? e) })
     spent += usd
-    console.error(`${r.task} ${r.setup} #${r.rep}: ERROR ${e?.message ?? e}`)
+    console.error(`${r.task.slice(0, 60)} ${r.setup} #${r.rep}: ERROR ${e?.message ?? e}`)
   }
-  if (!o.keep) rmSync(dir, { recursive: true, force: true })
+  if (task.size === 'swe') {
+    wsl(['cleanup', runId])
+    // the image is several GB: dropped once this instance has no more runs planned
+    if (!plan.slice(i + 1).some(x => x.task === r.task)) wsl(['rmi', task.image])
+  }
+  if (dir && !o.keep) rmSync(dir, { recursive: true, force: true })
   rmSync(debugFile, { force: true })
 }
 
