@@ -36,7 +36,7 @@ export function lintHandoff(body: string, now: number, heading = 'RESUME HERE'):
 }
 
 // `ctxAt` and `limit` (the publish count that makes a restart due; Infinity = counter off) come from the options
-type S = { scoped: boolean; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
+type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
 const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit
 
 function publish($: EngineInterface, s: S) {
@@ -63,7 +63,7 @@ async function readCtx($: EngineInterface, s: S) {
 export const register: Register = (on, options) => {
   const counter = flag(options, 'restartPublishCounter') && text(options, 'restartPublishPattern') !== ''
   const ctxAt = num(options, 'restartContextAt', CTX_AT)
-  const s: S = { scoped: false, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
+  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
   const publishRe = pattern(text(options, 'restartPublishPattern'))
   const lint = flag(options, 'restartHandoffLint')
   const file = esc(text(options, 'restartHandoffFile', 'HANDOFF.md'))
@@ -109,6 +109,8 @@ export const register: Register = (on, options) => {
         s.publishes += 1
         publish($, s)
       }
+      // a long turn (a headless run, or many tool calls in a row) never reaches turn.complete: read the context here too, every 5th call
+      if (++s.calls % 5 === 0) await readCtx($, s).catch(() => undefined)
       const r0 = await next(e)
       // once per due period, as a note on this tool result
       const r = s.note

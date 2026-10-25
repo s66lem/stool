@@ -26,7 +26,7 @@ test('scope', () => {
 test('the 3rd publish and 65% context add one note to the next tool result; a RESUME HERE rewrite resets the count', OPT, async ($, on) => {
   const toasts: string[] = []
   const states: unknown[] = []
-  let percent = 40
+  let percent = 10 // 100k tokens of a 1M window: under both limits
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1000000, percent }, rateLimits: [] } }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
@@ -90,4 +90,19 @@ test('150k context tokens make a restart due even at a low percent; re-said ever
   tokens = 215_000
   await turn()
   expect((await notes()).length).toBe(1)
+})
+
+test('context is also read while a long turn runs: the nudge arrives on a tool result with no turn.complete', OPT, async ($, on) => {
+  let tokens = 100_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  for (let i = 0; i < 6; i++) expect((await notes()).length).toBe(0)
+  tokens = 170_000
+  let found = 0
+  for (let i = 0; i < 6; i++) found += (await notes()).length
+  expect(found).toBe(1)
 })
