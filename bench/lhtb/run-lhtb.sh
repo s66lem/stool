@@ -17,4 +17,4 @@ sed -i -e 's/^allow_internet *= *false/allow_internet = true/' "$copy/task.toml"
 if [ "$loop" != on ]; then sed -i 's/^continue_until_timeout *= *true/continue_until_timeout = false/' "$copy/task.toml"; fi
   # Claude Code in the container needs the network (install + API); the same for both setups
 timeout 14400 /root/hvenv/bin/harbor run -p "$copy" -e docker -a claude-code -m "$model" -n 1 \
-  --timeout-multiplier "$mult" --agent-setup-timeout-multiplier 20 --jobs-dir "$jobs" --ae CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" 2>&1 | sed -E 's/sk-ant-[A-Za-z0-9_-]+/sk-ant-***/g' | tail -n 40
+  --timeout-multiplier "$mult" --agent-setup-timeout-multiplier 20 --environment-build-timeout-multiplier 20 --jobs-dir "$jobs" --ae CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" 2>&1 | sed -E 's/sk-ant-[A-Za-z0-9_-]+/sk-ant-***/g' | tail -n 40

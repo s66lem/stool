@@ -22,6 +22,7 @@ const { values: o } = parseArgs({
     stool: { type: 'string', default: join(HERE, '..', '..') },
     out: { type: 'string' },
     loop: { type: 'boolean', default: false },
+    setups: { type: 'string', default: 'off,on' },
   },
 })
 if (!o.tasks) {
@@ -52,15 +53,16 @@ function collect(jobsDir) {
   const reward = existsSync(rew) ? Number(readFileSync(rew, 'utf8').trim()) : 0
   const projects = join(base, 'agent', 'sessions', 'projects')
   const sessionDir = existsSync(projects) ? join(projects, readdirSync(projects)[0]) : ''
-  const sessionId = sessionDir ? readdirSync(sessionDir).find(f => f.endsWith('.jsonl'))?.replace('.jsonl', '') : undefined
-  const cost = sessionId ? sessionCost(projects, sessionId) : { usd: 0, msgs: 0, leadMaxCtx: 0, agentMaxCtx: 0, agents: 0 }
+  // the re-prompt loop can start a fresh conversation each round: price every one
+  const ids = sessionDir ? readdirSync(sessionDir).filter(f => f.endsWith('.jsonl')).map(f => f.replace('.jsonl', '')) : []
+  const cost = ids.map(id => sessionCost(projects, id)).reduce((a, c) => ({ usd: a.usd + c.usd, msgs: a.msgs + c.msgs, leadMaxCtx: Math.max(a.leadMaxCtx, c.leadMaxCtx), agentMaxCtx: Math.max(a.agentMaxCtx, c.agentMaxCtx), agents: a.agents + c.agents }), { usd: 0, msgs: 0, leadMaxCtx: 0, agentMaxCtx: 0, agents: 0 })
   const debug = join(base, 'agent', 'claude-debug.txt')
   const stool = existsSync(debug) && /hooks module stool@\S+ loaded/.test(readFileSync(debug, 'utf8'))
   return { reward, stool, ...cost }
 }
 
 for (const task of o.tasks.split(',')) {
-  for (const setup of ['off', 'on']) {
+  for (const setup of o.setups.split(',')) {
     if (spent >= budget) break
     const dir = join(o.jobs, `${task.replace(/\W+/g, '-')}-${setup}`)
     rmSync(dir, { recursive: true, force: true })
