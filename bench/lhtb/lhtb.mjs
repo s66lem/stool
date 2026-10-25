@@ -21,6 +21,7 @@ const { values: o } = parseArgs({
     jobs: { type: 'string', default: 'G:/bench-work/lhtb-jobs' },
     stool: { type: 'string', default: join(HERE, '..', '..') },
     out: { type: 'string' },
+    loop: { type: 'boolean', default: false },
   },
 })
 if (!o.tasks) {
@@ -28,6 +29,11 @@ if (!o.tasks) {
   process.exit(1)
 }
 mkdirSync(o.jobs, { recursive: true })
+// the "on" setup uploads stool into the task's container: send the committed files only (never the private dev/ notes)
+const stoolCopy = join(o.jobs, '_stool')
+rmSync(stoolCopy, { recursive: true, force: true })
+mkdirSync(stoolCopy, { recursive: true })
+if (spawnSync(`git -C "${o.stool}" archive HEAD | tar -x -C "${stoolCopy}"`, { shell: true }).status !== 0) throw new Error('could not export stool')
 const budget = Number(o['budget-usd'])
 const rows = []
 let spent = 0
@@ -55,7 +61,7 @@ for (const task of o.tasks.split(',')) {
     rmSync(dir, { recursive: true, force: true })
     mkdirSync(dir, { recursive: true })
     const path = existsSync(join(HERE, '..', '..', 'dev')) && task.startsWith('examples/') ? `harbor/${task}` : `tasks/${task}`
-    const p = spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'bash', toLinux(join(HERE, 'run-lhtb.sh')), path, setup, o.model, o.mult, toLinux(dir), toLinux(o.stool)], { encoding: 'utf8', timeout: 5 * 3600_000, maxBuffer: 64 * 1024 * 1024 })
+    const p = spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'bash', toLinux(join(HERE, 'run-lhtb.sh')), path, setup, o.model, o.mult, toLinux(dir), toLinux(stoolCopy), o.loop ? 'on' : 'off'], { encoding: 'utf8', timeout: 5 * 3600_000, maxBuffer: 64 * 1024 * 1024 })
     let r
     try {
       r = collect(dir)
