@@ -3,7 +3,7 @@
 // each run from the transcript Claude Code left in the task's container logs, and prints $ and reward per task.
 //   node bench/lhtb/lhtb.mjs --tasks t1,t2 [--model sonnet-id] [--mult 0.25] [--budget-usd 40] [--jobs G:/bench-work/lhtb-jobs] [--out file]
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -33,7 +33,12 @@ mkdirSync(o.jobs, { recursive: true })
 const stoolCopy = join(o.jobs, '_stool')
 rmSync(stoolCopy, { recursive: true, force: true })
 mkdirSync(stoolCopy, { recursive: true })
-if (spawnSync(`git -C "${o.stool}" archive HEAD | tar -x -C "${stoolCopy}"`, { shell: true }).status !== 0) throw new Error('could not export stool')
+const tarFile = `${stoolCopy}.tar`
+const exp = spawnSync('git', ['-C', resolve(o.stool), 'archive', '--format=tar', '-o', tarFile, 'HEAD'], { encoding: 'utf8' })
+// tar gets a relative path: GNU tar reads "G:" as a host name
+const unp = exp.status === 0 ? spawnSync('tar', ['-xf', '../_stool.tar'], { cwd: stoolCopy, encoding: 'utf8' }) : exp
+if (unp.status !== 0) throw new Error(`could not export stool: ${(unp.stderr ?? '').trim()}`)
+rmSync(tarFile, { force: true })
 const budget = Number(o['budget-usd'])
 const rows = []
 let spent = 0
