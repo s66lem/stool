@@ -153,7 +153,7 @@ export const register: Register = (on, options) => {
     await $.tool.register(USAGE_SINCE_TOOL)
     await $.tool.register(OUTCOMES_TOOL)
     // the trial: one line per session with its arm, for bench/trial.mjs to read
-    if (flag(options, 'trial')) {
+    if (flag(options, 'trial') && inScope(e.cwd, roots(options))) {
       const id = await $.session.id()
       const file = await fileOf($, TRIAL_LOG)
       const old = await $.fs.read(file).catch(() => '')
