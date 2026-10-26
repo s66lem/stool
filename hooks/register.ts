@@ -1,7 +1,7 @@
 // stool: one module that registers each bundled mod's hooks (sources under hooks/<mod>/)
 import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
-import { USAGE_SINCE_TOOL, register as agentMeter } from './agent-meter/register'
+import { OUTCOMES_TOOL, USAGE_SINCE_TOOL, register as agentMeter } from './agent-meter/register'
 import { register as permission } from './permission/register'
 import { register as dispatchGuard } from './dispatch-guard/register'
 import { RELOAD_TOOL, RESTART_TOOL, register as freshRestart } from './fresh-restart/register'
@@ -21,6 +21,7 @@ const TOOLS: { spec: ToolSpec; isScoped?: boolean }[] = [
   { spec: RESTART_TOOL },
   { spec: RELOAD_TOOL },
   { spec: USAGE_SINCE_TOOL },
+  { spec: OUTCOMES_TOOL },
   { spec: KEEP_WARM_TOOL, isScoped: true },
 ]
 

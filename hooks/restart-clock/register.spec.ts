@@ -124,3 +124,16 @@ test('the governor lowers the token threshold while the usage strip says squeeze
   await turn()
   expect((await notes())[0]).toContain('lowered because your usage window is running hot') // 110k is over 100k
 })
+
+test('trial off arm: the token threshold is off (200k does not make a restart due)', { options: { ...OPT.options, trial: true, trialOffShare: 100 } }, async ($, on) => {
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 's-off' }) as never)
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: 20, tokens: 200_000 }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  const ctx = (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  expect(ctx.length).toBe(0)
+})

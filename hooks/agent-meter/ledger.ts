@@ -5,7 +5,7 @@ export const HEADER_OLD = 'time\tcwd\ttype\tmodel\tdescription\tcalls\ttokens\ts
 export const HEADER = `${HEADER_OLD}\tagent\tinput\toutput\tcache_read\tcache_write\tsession`
 
 export type Tokens = { input: number; output: number; cacheRead: number; cacheWrite: number }
-export type Row = Tokens & { at: number; type: string; model: string; tokens: number; agent: string; session: string; isSplit: boolean }
+export type Row = Tokens & { at: number; cwd: string; type: string; model: string; tokens: number; agent: string; session: string; isSplit: boolean }
 
 /** The columns after `cap`: who it was, the four token counts, the session. */
 export const extraCols = (agent: string, t: Tokens, session: string) => [agent, t.input, t.output, t.cacheRead, t.cacheWrite, session].join('\t')
@@ -22,7 +22,7 @@ export function parse(text: string): Row[] {
       const at = Date.parse(c[0] ?? '')
       if (Number.isNaN(at)) return []
       const n = (i: number) => Number(c[i]) || 0
-      return [{ at, type: c[2] ?? '', model: c[3] ?? '', tokens: n(6), agent: c[9] ?? '', input: n(10), output: n(11), cacheRead: n(12), cacheWrite: n(13), session: c[14] ?? '', isSplit: c.length > 13 }]
+      return [{ at, cwd: c[1] ?? '', type: c[2] ?? '', model: c[3] ?? '', tokens: n(6), agent: c[9] ?? '', input: n(10), output: n(11), cacheRead: n(12), cacheWrite: n(13), session: c[14] ?? '', isSplit: c.length > 13 }]
     })
 }
 
@@ -70,6 +70,16 @@ export function rate(rows: Row[], anchor: Anchor, pctNow: number, now: number, w
 
 export const fmtTokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}m` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n))
 export const fmtW = (w: number) => `${w >= 10 ? w.toFixed(0) : w >= 0.1 ? w.toFixed(1) : w.toFixed(2)}w%`
+
+/** A folder's project: a worktree under `.claude/worktrees/` counts as the repository it belongs to. */
+export const projectOf = (cwd: string) => cwd.split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').replace(/\/\.claude\/worktrees\/.*$/, '')
+
+/** Dollars per project over the rows that pass `keep`, biggest first. */
+export function byProject(rows: Row[], keep: (r: Row) => boolean, writeMult = WRITE_MULT): { project: string; usd: number }[] {
+  const m = new Map<string, number>()
+  for (const r of rows.filter(keep)) if (r.isSplit) m.set(projectOf(r.cwd), (m.get(projectOf(r.cwd)) ?? 0) + dollars(r, writeMult))
+  return [...m].map(([project, usd]) => ({ project, usd })).sort((a, b) => b.usd - a.usd)
+}
 
 /** "10m", "2h", "1d" before now, or any date text. */
 export function since(arg: string, now: number): number | undefined {

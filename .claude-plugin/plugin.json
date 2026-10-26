@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -142,6 +142,20 @@
       "description": "The restart clock also says a restart is due when the main conversation reaches this many context tokens (0 = off). Every message re-reads the whole context, so cost climbs with it",
       "default": 150000,
       "min": 0
+    },
+    "trial": {
+      "type": "boolean",
+      "title": "Cost-lever trial",
+      "description": "Run a randomized trial of the cost levers on your own sessions: a share of sessions (by session id) runs with the token restart nudge, the default agent cap and the governor switched off, and each session's arm is logged to ~/.claude/stool/trial.jsonl. Read the result with `node bench/trial.mjs` after a week or two",
+      "default": false
+    },
+    "trialOffShare": {
+      "type": "number",
+      "title": "Trial: share without levers (%)",
+      "description": "Percent of sessions in the trial that run with the levers off",
+      "default": 20,
+      "min": 0,
+      "max": 100
     },
     "governor": {
       "type": "boolean",

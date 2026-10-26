@@ -155,3 +155,39 @@ test('the governor shrinks the default cap while the usage strip says squeeze', 
   await $.agent.spawn({ prompt: 'Fix X.', description: 'fix x', subagentType: 'implementer' })
   expect(w.prompt).toContain('Tool-call cap: about 40')
 })
+
+test('outcomes: cost per project against its commits, a worktree counted with its repository', OPT, async ($, on) => {
+  const w = world(on)
+  w.pct = 15
+  w.store['usage-anchor:1970-01-08T00:00:00Z'] = { at: 9 * 3600_000, pct: 10 }
+  on('process.run', () => ({ value: { stdout: 'a one\nb two\n', stderr: '', exitCode: 0 } }) as never)
+  const rowAt = (cwd: string, input: number) => `1970-01-01T09:30:00.000Z\t${cwd}\tmain\tclaude-sonnet-5-5\td\t1\t${input}\t1\t\t\t${input}\t0\t0\t0\ts1`
+  w.file = `${HEADER_OLD}\n${rowAt('C:/p/game', 1_000_000)}\n${rowAt('C:/p/game/.claude/worktrees/x', 1_000_000)}\n`
+  const r = await $.tool.call({ tool: 'mcp__stool__outcomes', input: { since: '30d' } } as never)
+  const text = String((r as { result?: unknown }).result)
+  // $4 over 5 points; two commits: 2.5w% each
+  expect(text.split('\n')[0]).toBe('p/game: 5.0w% ($4.00), 2 commits, 2.5w% per commit')
+})
+
+test('trial off arm: no default cap told to the agent; the arm is logged once per session', { options: { ...OPT.options, trial: true, trialOffShare: 100 } }, async ($, on) => {
+  const w = world(on)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('tool.register', () => ({ value: undefined }) as never)
+  await $.session.start({ surface: null, isInteractive: false, cwd: IN })
+  await $.session.start({ surface: null, isInteractive: false, cwd: IN })
+  await $.agent.spawn({ prompt: 'Fix X.', description: 'fix x', subagentType: 'implementer' })
+  expect(w.prompt).toBe('Fix X.')
+  const lines = String(w.file).trim().split('\n')
+  expect(lines.length).toBe(1)
+  expect(JSON.parse(lines[0]!).arm).toBe('off')
+})
+
+test('trial on arm keeps the default cap and logs on', { options: { ...OPT.options, trial: true, trialOffShare: 0 } }, async ($, on) => {
+  const w = world(on)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('tool.register', () => ({ value: undefined }) as never)
+  await $.session.start({ surface: null, isInteractive: false, cwd: IN })
+  await $.agent.spawn({ prompt: 'Fix X.', description: 'fix x', subagentType: 'implementer' })
+  expect(w.prompt).toContain('Tool-call cap: about 80')
+  expect(JSON.parse(String(w.file).trim()).arm).toBe('on')
+})

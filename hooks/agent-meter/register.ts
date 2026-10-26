@@ -3,10 +3,11 @@
 // durationMs and usage (4 token counts); agent.spawn answers agentId. Live token counts need a turn.step stream hook: skipped.
 import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
-import { expand, flag, inScope, num, roots, text } from '../config'
-import { WRITE_MULT, extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
+import { expand, flag, inScope, num, roots, text, trialOff } from '../config'
+import { WRITE_MULT, byProject, extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
 import type { Anchor } from './ledger'
 
+export const TRIAL_LOG = '~/.claude/stool/trial.jsonl'
 export const LEDGER = '~/.claude/stool/agent-ledger.tsv'
 
 // the first "N tool calls" in the prompt is the cap (dispatch-guard appends its default after it)
@@ -64,6 +65,14 @@ export const USAGE_SINCE_TOOL: ToolSpec = {
   isDeferred: true,
 }
 
+export const OUTCOMES_TOOL: ToolSpec = {
+  name: 'outcomes',
+  description:
+    'What each project cost against what it shipped: weekly-percent points (an estimate) and git commits per project since a time, and the cost of one commit. Use it to see where the limit goes and whether it bought work.',
+  inputSchema: { type: 'object', properties: { since: { type: 'string', description: 'How far back: 12h, 3d, 7d, or a date. Default 7d.' } } },
+  isDeferred: true,
+}
+
 export const register: Register = (on, options) => {
   const ledger = text(options, 'agentLedger', LEDGER)
   // the main conversation's turns too (a ledger write each turn), so usage_since can split lead from agents
@@ -74,6 +83,8 @@ export const register: Register = (on, options) => {
   on('agent.spawn', { prompt: /[^]*|a{1}/ }, async ($, e, next) => {
     const isMine = !e.workflow && inScope(await $.session.cwd(), roots(options))
     const stated = capOf(e.prompt)
+    // trial off arm: no default cap
+    if (trialOff(options, await $.session.id())) return next(e)
     // the governor: the default cap shrinks while the 5-hour or weekly window runs hot (usage-pace's squeeze)
     const sq = governor && base > 0 ? Number((await $.state.get({ plugin: 'stool', key: 'usage' }).catch(() => undefined))?.value?.squeeze ?? 0) : 0
     const dflt = Math.max(Math.min(10, base), Math.round(base * [1, 0.75, 0.5][Math.min(2, Math.max(0, sq))]!))
@@ -140,6 +151,15 @@ export const register: Register = (on, options) => {
 
   on('session.start', { cwd: /[^]*|a{31}/ }, async ($, e, next) => {
     await $.tool.register(USAGE_SINCE_TOOL)
+    await $.tool.register(OUTCOMES_TOOL)
+    // the trial: one line per session with its arm, for bench/trial.mjs to read
+    if (flag(options, 'trial')) {
+      const id = await $.session.id()
+      const file = await fileOf($, TRIAL_LOG)
+      const old = await $.fs.read(file).catch(() => '')
+      if (!old.includes(`"${id}"`))
+        await $.fs.write(file, old + JSON.stringify({ t: await $.clock.now(), session: id, cwd: e.cwd, arm: trialOff(options, id) ? 'off' : 'on' }) + '\n')
+    }
     return next(e)
   })
 
@@ -172,5 +192,30 @@ export const register: Register = (on, options) => {
       'Counts sessions under projectRoots on this machine; others use the weekly meter too.',
     ].filter(Boolean)
     return { result: [head, part('lead', lead), part('agents', agents), ...notes].join('\n') }
+  }).catch(($, e, next) => next(e))
+
+  on('tool.call', { tool: 'mcp__stool__outcomes' }, async ($, e) => {
+    const input = ((e as { input?: Record<string, unknown> }).input ?? {}) as { since?: string }
+    const now = await $.clock.now()
+    const from = since(input.since ?? '7d', now)
+    if (from === undefined) return { result: `outcomes: cannot read "${input.since}" as a time (try 12h, 3d, 7d, or a date).` }
+    const rows = parse(await $.fs.read(await fileOf($, ledger)).catch(() => ''))
+    const week = await ensureAnchor($, now).catch(() => undefined)
+    const cal = week ? rate(rows, week.anchor, week.pct, now, writeMult) : undefined
+    const out: string[] = []
+    for (const { project, usd } of byProject(rows, r => r.at >= from && r.at <= now, writeMult).slice(0, 12)) {
+      const log = await $.process.run(['git', '-C', project, 'log', '--all', `--since=${new Date(from).toISOString()}`, '--oneline'], { timeoutMs: 10_000 }).catch(() => undefined)
+      const commits = log === undefined ? undefined : log.stdout.split('\n').filter(Boolean).length
+      const w = cal?.perUsd === undefined ? undefined : usd * cal.perUsd
+      const cost = w === undefined ? `$${usd.toFixed(2)}` : `${fmtW(w)} ($${usd.toFixed(2)})`
+      const per = commits === undefined ? 'not a git folder' : commits === 0 ? '0 commits' : `${commits} commits, ${w === undefined ? `$${(usd / commits).toFixed(2)}` : fmtW(w / commits)} per commit`
+      out.push(`${project.split('/').slice(-2).join('/')}: ${cost}, ${per}`)
+    }
+    const notes = [
+      cal?.perUsd === undefined ? 'No weekly-point rate yet: dollars at list price only.' : '',
+      cal && !cal.hasLead ? 'ledgerMainTurns is off: only agents are counted, so lead work is missing.' : '',
+      'Commits are every commit on any branch in that folder since the start time, whoever wrote them; only sessions with this plugin loaded are counted.',
+    ].filter(Boolean)
+    return { result: [out.length ? out.join('\n') : 'No ledger rows in that window.', ...notes].join('\n') }
   }).catch(($, e, next) => next(e))
 }

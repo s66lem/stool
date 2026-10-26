@@ -5,7 +5,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { RestartStrip } from '../../types'
-import { flag, inScope, num, pattern, roots, text } from '../config'
+import { flag, inScope, num, pattern, roots, text, trialOff } from '../config'
 
 const slash = (p: unknown) => String(p ?? '').split(String.fromCharCode(92)).join('/')
 const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -83,6 +83,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', { cwd: /[^]*|a{13}/ }, async ($, e, next) => {
     s.scoped = inScope(e.cwd, roots(options))
+    // trial off arm: only the percent threshold (65%) stays
+    if (trialOff(options, await $.session.id())) s.tokAt = s.base = 0
     return next(e)
   })
 
