@@ -83,6 +83,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
 | `restartContextAt` | 65 | Context percent at which a restart is due. |
 | `restartContextTokens` | 150000 | Context tokens at which a restart is due too (0 = off); re-said every 50k after. |
+| `governor` | on | While the 5-hour or weekly window would run out early, lowers the restart threshold (150k, then 100k, then 75k) and the default agent tool-call cap (80, then 60, then 40). It changes neither models nor quality, only how soon a long context or a long agent is cut. |
 | `agentCallCap` | 80 | Tool calls an agent gets when its prompt states no cap (0 = off). Past it, an unfinished agent writes a handoff to `~/.claude/stool/relay/` and ends with `RELAY: <file>`; the lead is told to continue in a fresh agent that reads it (relay: the new agent starts small instead of carrying everything the first one read). Tools stop a quarter past the cap. |
 | `leadGuard` | false | Turn on the lead guard. |
 | `leadGuardDocPaths` | `docs/\|CLAUDE\.md` | Regex source: shell writes to matching paths are denied. Empty = rule off. |

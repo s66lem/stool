@@ -106,3 +106,21 @@ test('context is also read while a long turn runs: the nudge arrives on a tool r
   for (let i = 0; i < 6; i++) found += (await notes()).length
   expect(found).toBe(1)
 })
+
+test('the governor lowers the token threshold while the usage strip says squeeze', OPT, async ($, on) => {
+  let squeeze = 0
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: 11, tokens: 110_000 }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  on('state.get', () => ({ value: { value: { squeeze } } }) as never)
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  const turn = () => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  await turn()
+  expect((await notes()).length).toBe(0) // 110k is under 150k on pace
+  squeeze = 1
+  await turn()
+  expect((await notes())[0]).toContain('lowered because your usage window is running hot') // 110k is over 100k
+})

@@ -36,7 +36,7 @@ export function lintHandoff(body: string, now: number, heading = 'RESUME HERE'):
 }
 
 // `ctxAt` and `limit` (the publish count that makes a restart due; Infinity = counter off) come from the options
-type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
+type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; base: number; governor: boolean; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
 const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit
 
 function publish($: EngineInterface, s: S) {
@@ -52,6 +52,11 @@ function publish($: EngineInterface, s: S) {
 
 // percent is absent on some hosts' readings: fall back to tokens over window
 async function readCtx($: EngineInterface, s: S) {
+  // the governor: the token threshold drops while the 5-hour or weekly window runs hot (usage-pace's squeeze)
+  if (s.base > 0 && s.governor) {
+    const sq = Number((await $.state.get({ plugin: 'stool', key: 'usage' }).catch(() => undefined))?.value?.squeeze ?? 0)
+    s.tokAt = Math.round(s.base * [1, 0.67, 0.5][Math.min(2, Math.max(0, sq))]!)
+  }
   const c = (await $.session.usage()).context
   const p = c.percent ?? (c.tokens !== undefined && c.window ? (100 * c.tokens) / c.window : undefined)
   if (p === undefined) return
@@ -63,7 +68,7 @@ async function readCtx($: EngineInterface, s: S) {
 export const register: Register = (on, options) => {
   const counter = flag(options, 'restartPublishCounter') && text(options, 'restartPublishPattern') !== ''
   const ctxAt = num(options, 'restartContextAt', CTX_AT)
-  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
+  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, base: num(options, 'restartContextTokens', CTX_TOKENS), governor: options?.governor !== false, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
   const publishRe = pattern(text(options, 'restartPublishPattern'))
   const lint = flag(options, 'restartHandoffLint')
   const file = esc(text(options, 'restartHandoffFile', 'HANDOFF.md'))
@@ -114,7 +119,7 @@ export const register: Register = (on, options) => {
       const r0 = await next(e)
       // once per due period, as a note on this tool result
       const r = s.note
-        ? ((s.note = false), { ...r0, context: [...(r0.context ?? []), `restart-clock: restart due (${s.ctx !== null && s.ctx >= ctxAt ? `ctx ${s.ctx}%` : s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt ? `context ${Math.round((s.tokens ?? 0) / 1000)}k tokens, every message re-reads it` : `${s.publishes} publishes since the handoff was rewritten`}): run the session-restart skill at the next natural stop`] })
+        ? ((s.note = false), { ...r0, context: [...(r0.context ?? []), `restart-clock: restart due (${s.ctx !== null && s.ctx >= ctxAt ? `ctx ${s.ctx}%` : s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt ? `context ${Math.round((s.tokens ?? 0) / 1000)}k tokens, every message re-reads it${s.tokAt < s.base ? '; lowered because your usage window is running hot' : ''}` : `${s.publishes} publishes since the handoff was rewritten`}): run the session-restart skill at the next natural stop`] })
         : r0
       const path = slash((e as { file_path?: string }).file_path)
       if (!lint || r.deny !== undefined || r.isError || !fileRe.test(path)) return r

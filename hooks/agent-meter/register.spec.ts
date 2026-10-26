@@ -148,3 +148,10 @@ test('an agent result that relays tells the lead to continue with a fresh agent 
   w.toolResult = 'All done.'
   expect(((await $.tool.call({ tool: 'Agent', input: {} } as never)) as { context?: string[] }).context).toBeUndefined()
 })
+
+test('the governor shrinks the default cap while the usage strip says squeeze', OPT, async ($, on) => {
+  const w = world(on)
+  on('state.get', () => ({ value: { value: { squeeze: 2 } } }) as never)
+  await $.agent.spawn({ prompt: 'Fix X.', description: 'fix x', subagentType: 'implementer' })
+  expect(w.prompt).toContain('Tool-call cap: about 40')
+})

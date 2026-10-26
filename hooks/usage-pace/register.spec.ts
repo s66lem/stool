@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { cap, line, runsOut, when } from './register'
+import { cap, line, runsOut, squeeze, when } from './register'
 
 const H = 3600_000
 const reset5 = Date.parse('2026-10-10T11:40:00Z')
@@ -79,4 +79,14 @@ test('the meter log gets a line each time a reading moves, when usageLog is on',
   expect(lines.length).toBe(2)
   expect(lines[0]).toEqual({ t: 5 * H, five: 12, week: 22, weekResetsAt: '2026-10-15T10:00:00Z' })
   expect(lines[1].five).toBe(13)
+})
+
+test('squeeze is 0 on pace, 1 when a window runs out early, 2 well early or at the stop line', () => {
+  const now = minutesIn(60)
+  expect(squeeze([], now)).toBe(0)
+  expect(squeeze([five(15)], now)).toBe(0)
+  expect(squeeze([five(25)], now)).toBe(1)
+  expect(squeeze([five(40)], now)).toBe(2)
+  expect(squeeze([five(96)], minutesIn(280))).toBe(2)
+  expect(squeeze([five(15), week(50, now, 100)], now)).toBe(1)
 })

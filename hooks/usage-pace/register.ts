@@ -113,6 +113,16 @@ export function cap(limits: SessionRateLimit[], nowMs: number, samples: Sample[]
   return { cap: BASE, why: 'on pace' }
 }
 
+/** How hot the pace runs, for the governor: 0 on pace, 1 a window would run out early, 2 well early or past the stop line. */
+export function squeeze(limits: SessionRateLimit[], nowMs: number, samples: Sample[] = []): number {
+  const five = pace(limits, 'five_hour', nowMs, samples)
+  const week = pace(limits, 'seven_day', nowMs)
+  if (five && five.used >= STOP_AT) return 2
+  if (five && five.projected > BAD_PERCENT) return 2
+  if ((five && five.projected > 100) || (week && week.projected > 100)) return 1
+  return 0
+}
+
 const report = (limits: SessionRateLimit[], nowMs: number, samples: Sample[]) => {
   const c = cap(limits, nowMs, samples)
   const row = (label: string, kind: string) => {
@@ -153,6 +163,7 @@ async function addTokens($: EngineInterface, limits: SessionRateLimit[], add: nu
 async function publish($: EngineInterface, limits: SessionRateLimit[], now: number, samples: Sample[], add = 0) {
   const strip: UsageStrip = {
     cap: cap(limits, now, samples).cap,
+    squeeze: squeeze(limits, now, samples),
     weekly: windowOf(limits, 'seven_day', now),
     five: windowOf(limits, 'five_hour', now, samples),
     tokens: await addTokens($, limits, add),

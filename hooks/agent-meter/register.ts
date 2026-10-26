@@ -69,11 +69,15 @@ export const register: Register = (on, options) => {
   // the main conversation's turns too (a ledger write each turn), so usage_since can split lead from agents
   const mainTurns = flag(options, 'ledgerMainTurns')
   const writeMult = num(options, 'ledgerCacheWriteMult', WRITE_MULT)
-  const dflt = num(options, 'agentCallCap', CALL_CAP)
+  const base = num(options, 'agentCallCap', CALL_CAP)
+  const governor = options?.governor !== false
   on('agent.spawn', { prompt: /[^]*|a{1}/ }, async ($, e, next) => {
     const isMine = !e.workflow && inScope(await $.session.cwd(), roots(options))
     const stated = capOf(e.prompt)
-    const useDefault = isMine && dflt > 0 && stated === undefined && !hasCap(e.prompt)
+    // the governor: the default cap shrinks while the 5-hour or weekly window runs hot (usage-pace's squeeze)
+    const sq = governor && base > 0 ? Number((await $.state.get({ plugin: 'stool', key: 'usage' }).catch(() => undefined))?.value?.squeeze ?? 0) : 0
+    const dflt = Math.max(Math.min(10, base), Math.round(base * [1, 0.75, 0.5][Math.min(2, Math.max(0, sq))]!))
+    const useDefault = isMine && base > 0 && stated === undefined && !hasCap(e.prompt)
     const r = await next(useDefault ? { ...e, prompt: `${e.prompt}
 
 - Tool-call cap: about ${dflt}; when it runs out, stop and report what you have.` } : e)

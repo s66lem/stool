@@ -45,7 +45,8 @@ export type UsageWindow = {
   projected: number | null // percent it is on pace for at the reset; null before there is a pace
   limitAt: number | null // ms epoch it runs out at this pace; null when it does not
 }
-export type UsageStrip = { cap: number; weekly: UsageWindow | null; five: UsageWindow | null; tokens: number }
+// squeeze: 0 on pace, 1 a window would run out early, 2 well early or at its stop line; the governor tightens the restart and agent limits by it
+export type UsageStrip = { cap: number; squeeze: number; weekly: UsageWindow | null; five: UsageWindow | null; tokens: number }
 // restart-clock's strip: context % of the lead, red on the strip once a restart is due
 export type RestartStrip = { ctx: number | null; publishes: number; due: boolean }
 // agent-meter's strip: each running agent's tool calls against the cap in its prompt

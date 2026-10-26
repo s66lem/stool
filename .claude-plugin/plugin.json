@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -142,6 +142,12 @@
       "description": "The restart clock also says a restart is due when the main conversation reaches this many context tokens (0 = off). Every message re-reads the whole context, so cost climbs with it",
       "default": 150000,
       "min": 0
+    },
+    "governor": {
+      "type": "boolean",
+      "title": "Usage governor",
+      "description": "While the 5-hour or weekly window would run out early, lower the restart threshold (150k to 100k, then 75k) and the default agent tool-call cap (80 to 60, then 40). Never changes models or quality",
+      "default": true
     },
     "agentCallCap": {
       "type": "number",
