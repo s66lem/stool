@@ -2,10 +2,10 @@
 # LHTB part of the bench, run inside the "bench" WSL distro as root.
 #   run-lhtb.sh <task-path> <off|on> <model> <timeout-multiplier> <jobs-dir> [stool-dir]
 # Claude Code runs inside the task's container via Harbor; "on" mounts <stool-dir> (patch-harbor.py applied) and
-# loads it with --plugin-dir. The sign-in token comes from /mnt/g/wsl/secrets/oauth and is never printed.
+# loads it with --plugin-dir. The sign-in token comes from the file named by BENCH_TOKEN_FILE and is never printed.
 set -uo pipefail
 task=$1 setup=$2 model=$3 mult=$4 jobs=$5 stool=${6:-} loop=${7:-off}
-export CLAUDE_CODE_OAUTH_TOKEN="$(cat /mnt/g/wsl/secrets/oauth)"
+export CLAUDE_CODE_OAUTH_TOKEN="$(cat "${BENCH_TOKEN_FILE:?set BENCH_TOKEN_FILE to a file holding the token}")"
 unset ANTHROPIC_API_KEY
 if [ "$setup" = on ]; then export STOOL_PLUGIN_DIR="$stool"; else unset STOOL_PLUGIN_DIR; fi
 cd /root/LHTB

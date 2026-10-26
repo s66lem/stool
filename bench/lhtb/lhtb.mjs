@@ -68,7 +68,7 @@ for (const task of o.tasks.split(',')) {
     rmSync(dir, { recursive: true, force: true })
     mkdirSync(dir, { recursive: true })
     const path = existsSync(join(HERE, '..', '..', 'dev')) && task.startsWith('examples/') ? `harbor/${task}` : `tasks/${task}`
-    const p = spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'bash', toLinux(join(HERE, 'run-lhtb.sh')), path, setup, o.model, o.mult, toLinux(dir), toLinux(stoolCopy), o.loop ? 'on' : 'off'], { encoding: 'utf8', timeout: 5 * 3600_000, maxBuffer: 64 * 1024 * 1024 })
+    const p = spawnSync('wsl.exe', ['-d', 'bench', '-u', 'root', '--', 'bash', toLinux(join(HERE, 'run-lhtb.sh')), path, setup, o.model, o.mult, toLinux(dir), toLinux(stoolCopy), o.loop ? 'on' : 'off'], { encoding: 'utf8', timeout: 5 * 3600_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, WSLENV: `BENCH_TOKEN_FILE/p:${process.env.WSLENV ?? ''}` } })
     let r
     try {
       r = collect(dir)
