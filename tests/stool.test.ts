@@ -6,7 +6,7 @@ tier('user')
 const ROOT = 'C:/Users/dev/work/app'
 const OPT = { options: { projectRoots: ['C:/Users/dev/work'], leadGuard: true } }
 
-test('all five tools register, and lead-guard still denies beside the rest', OPT, async ($, on) => {
+test('session tools register beside the existing tools and lead-guard', OPT, async ($, on) => {
   mock.clock(on, { now: 10 * 3600_000 })
   const tools: string[] = []
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
@@ -18,7 +18,7 @@ test('all five tools register, and lead-guard still denies beside the rest', OPT
   on('store.keys', () => ({ value: [] }))
   on('tool.call', () => ({ result: 'ok' }))
   await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
-  for (const t of ['plan_progress', 'restart_session', 'reload_plugins', 'keep_warm']) expect(tools).toContain(t)
+  for (const t of ['plan_progress', 'restart_session', 'reload_plugins', 'keep_warm', 'start_session', 'list_sessions', 'stop_session']) expect(tools).toContain(t)
   expect((await $.tool.call({ tool: 'Bash', command: 'git add -A' })).deny).toContain('lead-guard')
 })
 
@@ -47,6 +47,6 @@ test('a session that lost tools offers them again at the next prompt, and leaves
   on('tool.register', (_$, e) => { registered.push(e.name); return { value: { tool: e.name } } })
   on('prompt.submit', (_$, e) => ({ text: e.text }))
   await $.prompt.submit({ text: 'hello', asUser: true, origin: { kind: 'composer' } } as never)
-  for (const t of ['agent_cap', 'restart_session', 'reload_plugins', 'usage_since', 'keep_warm']) expect(registered).toContain(t)
+  for (const t of ['agent_cap', 'restart_session', 'reload_plugins', 'usage_since', 'keep_warm', 'start_session', 'list_sessions', 'stop_session']) expect(registered).toContain(t)
   expect(registered).not.toContain('plan_progress')
 })
