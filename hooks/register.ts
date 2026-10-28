@@ -12,11 +12,13 @@ import { register as planProgress } from './plan-progress/register'
 import { register as captureGuard } from './capture-guard/register'
 import { AGENT_CAP_TOOL, register as usagePace } from './usage-pace/register'
 import { inScope, roots } from './config'
+import { SESSION_TOOLS, register as startSession } from './start-session/register'
 
 // The tools the parts offer at session.start. A session that resumes (after a reboot, 2026-10-20) can lose the ones whose
 // registration is the first thing a handler does: they run before the session binds and nothing says so. Each prompt
 // checks the model's tool list and offers again whichever is missing (a tool offered anew shows from the next prompt).
 const TOOLS: { spec: ToolSpec; isScoped?: boolean }[] = [
+  ...SESSION_TOOLS.map(spec => ({ spec })),
   { spec: AGENT_CAP_TOOL },
   { spec: RESTART_TOOL },
   { spec: RELOAD_TOOL },
@@ -39,6 +41,7 @@ export const register: Register = (on, options) => {
   planProgress(on, options)
   usagePace(on, options)
   freshRestart(on, options)
+  startSession(on, options)
   keepWarm(on, options)
   dispatchGuard(on, options)
   leadGuard(on, options)

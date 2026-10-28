@@ -29,4 +29,9 @@ for (const m of mods) {
   if (r.status) failed++
   rmSync(tmp, { recursive: true, force: true })
 }
+if (mods.includes('start-session')) {
+  const r = spawnSync(process.execPath, ['--test', join(root, 'tests/start-session.test.mjs')], { encoding: 'utf8' })
+  console.log(r.stdout + r.stderr)
+  if (r.status) failed++
+}
 process.exit(failed ? 1 : 0)

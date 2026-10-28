@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.14.1-4FC27A.svg)
+![Version](https://img.shields.io/badge/version-2.15.0-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -122,6 +122,52 @@ The settings window (`/plan-progress-settings`, or the gear in the footer) shows
 | `mcp__stool__restart_session` | `/clear` this session and submit a resume prompt when the turn ends; optional `model` (alias or id) runs `/model` after the clear, before the prompt. |
 | `mcp__stool__reload_plugins` | Run `/reload-plugins --force` when the turn ends. Over Remote Control, where that command is refused, it bumps the unused `reloadNonce` option instead: a changed option reloads stool (only stool, not the other plugins). |
 | `mcp__stool__keep_warm` | Turn keep-warm off or on for this session (only registered inside `projectRoots`). |
+| `mcp__stool__start_session` | Start an independent detached Claude Code session with `prompt`, absolute `cwd`, optional `model`, absolute `config_dir`, and `name`. Returns `session_id`, supervisor `pid`, `claude_pid`, status and log paths. |
+| `mcp__stool__list_sessions` | List the sessions stool started on this machine, including completed/stopped sessions. |
+| `mcp__stool__stop_session` | Stop a stool-started session by `session_id`, including its process tree; keep its transcript and logs. |
+
+### Independent sessions (start-session branch)
+
+Windows, macOS and Linux need Node.js and Claude Code on PATH (`node` and
+`claude.exe` on Windows, `claude` elsewhere). Sessions run headless with normal
+Claude permissions and a fresh context; permission-gated work can be denied until
+you resume interactively. The tools never enable permission bypass.
+
+To try this branch without changing the installed plugin:
+
+```powershell
+git clone --branch start-session https://github.com/s66lem/stool.git stool-start-session
+claude --plugin-dir ./stool-start-session
+```
+
+If this checkout is already on `start-session`, use `claude --plugin-dir .`.
+Start the orchestrator this way on each school machine. It can then call:
+
+```json
+{"prompt":"Read the handoff and work on the assigned task.","cwd":"C:/work/project","model":"sonnet","config_dir":"C:/accounts/school","name":"school seat"}
+```
+
+The supervisor survives the launching session and plugin reloads. Records and
+stdout/stderr logs live under `~/.claude/stool/started-sessions/<session_id>/`,
+shared across config directories on this machine. Prompts are stored locally in
+that directory, never inserted in a shell command. The UUID is allocated before
+launch; a startup/auth failure can leave a record without a resumable transcript,
+so check status and logs. `completed` means the CLI exited successfully.
+
+To open a persisted session later, first let it complete or call `stop_session`,
+then use its returned cwd and config directory:
+
+```powershell
+$env:CLAUDE_CONFIG_DIR = 'C:/accounts/school'
+Set-Location C:/work/project
+claude --resume <session_id>
+```
+
+On macOS/Linux: `cd /work/project` then
+`CLAUDE_CONFIG_DIR=/accounts/school claude --resume <session_id>`.
+Omit the config override when using the default account. A session appears in
+Claude's resume picker once Claude has saved its transcript. Stop/list operate
+only on stool's records and verify process identity before stopping a process.
 
 A subagent's shell commands also get `PLAN_PROGRESS_FILE` set to `~/.claude/stool/plan-progress-runs/<agentId>.json`; a script that writes `{"label","done","total"}` there gets a thin progress bar on that agent's strip while the file is under 30 s old.
 
@@ -139,7 +185,7 @@ Plugin state (`$.state`, plugin `stool`): `plans`, `isOpen`, `tick`, `speed`, `p
 
 ## Tests
 
-`claude plugin validate .` and `claude plugin test .` (a combined smoke test); `node tests/run-specs.mjs` runs each part's `hooks/<part>/register.spec.ts` alone; the progress bars' offline suite is described in `tests/plan-progress/README.md`. The cost bench (stool off vs on over fixed tasks, cost per passed task) is in `bench/README.md`.
+`claude plugin validate .` and `claude plugin test .` (a combined smoke test); `node tests/run-specs.mjs` runs each part's `hooks/<part>/register.spec.ts` alone and the independent-session process tests. `node tests/run-specs.mjs start-session` runs just that feature (real detached processes with a fake CLI, no API usage). The progress bars' offline suite is described in `tests/plan-progress/README.md`. The cost bench (stool off vs on over fixed tasks, cost per passed task) is in `bench/README.md`.
 
 ## Notes
 
