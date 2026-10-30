@@ -3,11 +3,11 @@ globalThis.h = (type, props, ...children) => ({ type, props: props ?? {}, childr
 
 export const TOOL = 'mcp__stool__plan_progress'
 
-export async function boot(file, kept = new Map(), state = new Map()) {
+export async function boot(file, kept = new Map(), state = new Map(), options = {}) {
   // a fresh module instance per scenario, so its module-level maps start empty
   const mod = await import(new URL(file, import.meta.url).href + '?n=' + Math.random())
   const hooks = []
-  mod.register((event, a, b) => hooks.push(b ? { event, matcher: a, fn: b } : { event, matcher: null, fn: a }), {})
+  mod.register((event, a, b) => hooks.push(b ? { event, matcher: a, fn: b } : { event, matcher: null, fn: a }), options)
 
   const listed = new Map() // $.agent.list(): id -> status, filled by spawn() and emptied by turnComplete()
   const others = new Map()
