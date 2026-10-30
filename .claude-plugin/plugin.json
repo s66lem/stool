@@ -80,6 +80,12 @@
       "description": "Show the time left to each usage window's reset",
       "default": true
     },
+    "planProgress": {
+      "type": "boolean",
+      "title": "Progress bars",
+      "description": "The plan_progress tool and its rules. Off: no tool, no prompt rules, no edit gate or Stop block (saves the model's extra calls); the usage and agent strips stay",
+      "default": true
+    },
     "keepWarm": {
       "type": "boolean",
       "title": "Keep-warm",

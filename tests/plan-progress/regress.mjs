@@ -383,6 +383,17 @@ const C = {
       performance.now = real
     }
   },
+  async plan_progress_off(E) {
+    const F = await boot(file, new Map(), new Map(), { planProgress: false })
+    const comp = F.hooks.find(h => h.event === 'prompt.compose')
+    const { sections } = await comp.fn(F.$, {}, async () => ({ sections: [] }))
+    await F.turnStart()
+    const edits = []
+    for (let i = 0; i < 6; i++) edits.push(await F.work('Edit'))
+    const stop = await F.stop('All set.')
+    const denied = edits.filter(r => r.deny).length
+    return [`tool ${F.toolSpec ? 'on' : 'off'}, rules ${sections.length}, denied ${denied}, stop ${stop.block ? 'blocked' : 'passes'}; on: tool ${E.toolSpec ? 'on' : 'off'}`, !F.toolSpec && sections.length === 0 && denied === 0 && !stop.block && !!E.toolSpec]
+  },
   async stop_still_blocks_open_bar(E) {
     await E.turnStart()
     await create(E)

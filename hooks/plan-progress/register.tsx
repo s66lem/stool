@@ -1590,6 +1590,8 @@ export const register: Register = (on, options) => {
   const seconds = Number(options?.doneBarSeconds ?? 30)
   doneStaysMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 30_000
   isTwinkling = options?.twinkle !== false
+  // planProgress off: no tool, no rules, no gate or Stop block (no extra calls); the usage and agent strips stay
+  const isBarsOn = options?.planProgress !== false
   // per-turn bookkeeping; module variables are fine here, a reload just starts a fresh count
   let workCalls = 0
   let sinceUpdate = 0
@@ -1646,6 +1648,7 @@ export const register: Register = (on, options) => {
       if (waiting.delete(agentId)) await editAgent($, agentId, a => (a.state === 'waiting' ? { ...a, state: 'running' } : a))
       return ran
     }
+    if (!isBarsOn) return next(e)
     if (SHELL_TOOLS.has(e.tool)) {
       isWaitingOnBackground = (e as unknown as Raw).run_in_background === true
       return next(e)
@@ -1677,7 +1680,7 @@ export const register: Register = (on, options) => {
   // only a turn that did work and left the bar unexplained is sent back once
   on('classic.Stop', async ($, e, next) => {
     const result = await next(e)
-    if (e.stop_hook_active || result.block || isWaitingOnBackground || (e.background_tasks?.length ?? 0) > 0) return result
+    if (!isBarsOn || e.stop_hook_active || result.block || isWaitingOnBackground || (e.background_tasks?.length ?? 0) > 0) return result
     const open = (await read($, plans)).filter(isOpenPlan)
     if (open.length === 0) return result
     const asks = /\?\s*$/.test(e.last_assistant_message ?? '')
@@ -1705,7 +1708,7 @@ export const register: Register = (on, options) => {
     // the terminal track's tint follows the /config theme (dark unless it says light)
     const theme = (await Promise.resolve().then(() => $.config.list()).catch(() => [])).find(r => r.key === 'theme')
     isLight = /light/i.test(String(theme?.value ?? 'dark'))
-    await $.tool.register({
+    if (isBarsOn) await $.tool.register({
       name: 'plan_progress',
       description: 'Live progress bar above the prompt, one per id. Create with title + stages; update with short ops (next, done, active, failed) or state.',
       inputSchema: {
@@ -1766,6 +1769,7 @@ export const register: Register = (on, options) => {
 
   on('prompt.compose', { promptModel: /[^]*|a{23}/ }, async ($, e, next) => {
     const result = await next(e)
+    if (!isBarsOn) return result
 
     return { sections: [...result.sections, { id: 'plan-progress:rules', text: RULES, scope: 'session' as const }] }
   })
@@ -1807,6 +1811,7 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'ExitPlanMode' }, async ($, e, next) => {
     play($, 'decision')
+    if (!isBarsOn) return next(e)
     const ran = await next(e)
     if (ran.deny !== undefined || ran.isError === true) return ran
     const text = (ran.result as { plan?: unknown } | undefined)?.plan

@@ -71,6 +71,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `projectRoots` | empty | Folders (with their subfolders) where the folder-scoped parts run: keep-warm, agent-meter, restart-clock, and the guards. Empty = every folder. |
 | `doneBarSeconds` | 30 | Seconds a finished progress bar stays while auto-close (`/plan-progress-autoclose`) is on. |
 | `twinkle` | true | Animate the dots of the terminal bar while Claude works. |
+| `planProgress` | true | The progress bars' `plan_progress` tool and its rules. Off: no tool, no prompt rules, no edit gate or Stop block, so agents make no extra calls; the usage and agent strips stay. |
 | `keepWarm` | true | Master switch for keep-warm. |
 | `stripAgents`, `stripWeekly`, `stripFive`, `stripWarm`, `stripContext` | true | Which groups the usage strip draws: agents / cap, weekly usage, 5-hour usage, keep-warm, context. Also switches in the settings window. |
 | `stripCodex` | true | Show the Codex agents running (`cx1`, teal, after the agent count): the Codex plugin's agents run on OpenAI, so they are listed apart and never count against the agent cap. Needs the dispatch guard. |
