@@ -17,6 +17,9 @@ Review this session for what was inefficient, time-wise and token-wise: agent ru
 - Update the project's handoff file (a "RESUME HERE" block: state, published versions/tags, what's unverified, the next task first) and its TODO. With no such file, use the `handoff` skill.
 - Commit, run the project's check, and push if the project has a remote and a push rule (scan for secrets first).
 
+## 2a. Every 10th restart: deep review
+Keep a restart counter in the project (`docs/restart_count.txt`, one integer; create it at 1). Bump it in every restart's handoff commit. When the new value is a multiple of 10, write the resume prompt's first task as a deep review instead of plain continue: read the last ~10 restarts' handoff history, `docs/FIXES.md`, the project's lessons and results; find where time, tokens and tries went against the progress they bought, rules broken more than once that still have no check script, tools that broke or stalled, and work that drifted into small tuning. Write `docs/research/deep_review_<n>.md` with ranked fixes, apply the cheap ones, and send the user the top 3 with the project's notify command. Run it inline; dispatching strong-model agents for it needs the user's OK.
+
 ## 2b. Context at 65% or more
 A long session's handoff misses things the lead no longer has in view. When the context sits at 65% or more (or the user asks), before the restart dispatch one read-only agent (a strong model) with the path of the handoff and the session transcript (the newest `.jsonl` under `~/.claude/projects/<project slug>/`). Ask for four lists: **A** facts in the transcript missing from the handoff; **B** contradictions and stale lines in the handoff; **C** the twelve facts that must not be lost; **D** user instructions never acted on. Fold the findings into the handoff (rewrite the block, don't append), commit, then go on. No `/compact` is needed: the clear replaces it.
 
