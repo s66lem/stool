@@ -1640,7 +1640,7 @@ export const register: Register = (on, options) => {
     // a subagent's call only names its current tool on its strip; no gate, no reminders
     if (e.agentId) {
       const agentId = e.agentId
-      if (!agentHome.has(agentId)) return next(e)
+      if (!isBarsOn || !agentHome.has(agentId)) return next(e)
       await editAgent($, agentId, a => ({ ...a, state: 'running', tool: e.tool }))
       if (e.tool_use_id) toolUses.set(e.tool_use_id, agentId)
       let ran
@@ -1779,6 +1779,8 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
+    // off: never offered at session.start; a tool kept from before an option change answers without drawing
+    if (!isBarsOn) return { deny: 'plan_progress is off (stool option planProgress); do not call it.' }
     const raw = e as unknown as Raw
     const now = await $.clock.now()
     const id = slug(str(raw.id, 60) || str(raw.title, 80))

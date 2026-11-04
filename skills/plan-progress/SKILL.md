@@ -1,6 +1,7 @@
 ---
 name: plan-progress
-description: Reference for the plan_progress bars (tool ops, /progress commands). The working rules are already in the system prompt; load only when the user asks about the bars or a call was refused.
+description: Reference for the plan_progress bars (tool ops, /progress commands), for the user to open with /stool:plan-progress. The working rules are in the system prompt while the bars are on; kept out of the model's skill list so planProgress off leaves no mention of the tool.
+disable-model-invocation: true
 ---
 
 # plan_progress

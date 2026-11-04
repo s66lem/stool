@@ -429,6 +429,21 @@ const C = {
     ])
     return [got, got === want && !!find(tree, 'restartAtPhaseEnd')]
   },
+  async settings_window_shows_the_options_as_set(E) {
+    const find = (n, key) => (Array.isArray(n) ? n.map(c => find(c, key)).find(Boolean) : n && typeof n === 'object' ? (n.props?.key === key ? n : (n.children ?? []).map(c => find(c, key)).find(Boolean)) : undefined)
+    const texts = n => (Array.isArray(n) ? n.flatMap(texts) : typeof n === 'string' ? [n] : n && typeof n === 'object' ? [n.props?.label, ...(n.children ?? []).flatMap(texts)].filter(Boolean) : [])
+    const F = await boot(file, new Map(), new Map(), { planProgress: false, usageStrip: false, reviewTiers: ['goal: why-behind every 7'], restartAtPhaseEnd: true })
+    await F.command('plan-progress-settings')
+    const tree = await F.render('Pane', { requestId: 'settings' })
+    const label = k => find(tree, k)?.props.label
+    const shown = [label('planProgress'), label('usageStrip'), label('restartAtPhaseEnd'), find(tree, 'tier-0-7')?.props.variant, texts(tree).includes('Review: goal')]
+    await find(tree, 'tier-0-0').props.onPress()
+    await find(tree, 'restartAtPhaseEnd').props.onPress()
+    await find(tree, 'planProgress').props.onPress()
+    const got = JSON.stringify(F.configSet)
+    const ok = JSON.stringify(shown) === JSON.stringify(['○ Off', '○ Off', '● On', 'primary', true]) && F.opened[0]?.id === 'settings' && got === JSON.stringify([{ key: 'stool.reviewTiers', value: ['goal: why-behind every 0'] }, { key: 'stool.restartAtPhaseEnd', value: false }, { key: 'stool.planProgress', value: true }])
+    return [`${JSON.stringify(shown)} ${got}`, ok]
+  },
   async stop_still_blocks_open_bar(E) {
     await E.turnStart()
     await create(E)

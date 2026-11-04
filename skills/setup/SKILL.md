@@ -1,11 +1,27 @@
 ---
-name: project-setup
-description: Set a repo up for long multi-session work with stool (on a project that already has CLAUDE.md, handoff, TODO or notes files it reviews them and proposes only the missing blocks for the user to pick) - docs/HANDOFF.md (one RESUME HERE block), docs/HANDOFF-history.md, docs/TODO.md, docs/FIXES.md, docs/restart_count.txt and a bookkeeping section in CLAUDE.md, matched to the restart-clock options, and explains and offers to set the restart review tiers (why-behind every 5th restart, deep review every 10th). Use when the user runs /project-setup or asks to set a project up for handoffs, session restarts or the stool workflow.
+name: setup
+description: Set a project up for stool, asking first - a short menu of which parts to turn on (progress bars, usage strip, keep-warm, guards, restart review tiers and their intervals, restart threshold, handoff/TODO/FIXES files), then it applies the picks. Writes docs/HANDOFF.md (one RESUME HERE block), HANDOFF-history.md, TODO.md, FIXES.md, restart_count.txt and a bookkeeping section in CLAUDE.md; on a project that already has such files it proposes only the missing pieces. Use when the user runs /stool:setup or asks to set a project up for stool. /stool:quicksetup does the same with defaults and no questions.
 argument-hint: "[one line on what the project is]"
 disable-model-invocation: true
 ---
 
-Set this repo up so any fresh session can pick it up from files alone, and so `stool:session-restart` and the restart clock have what they expect. Project note from the user: `$ARGUMENTS`.
+Set this repo up so any fresh session can pick it up from files alone, and so `stool:session-restart` and the restart clock have what they expect. Project note from the user: `$ARGUMENTS`. Write nothing until the user has answered step 0.
+
+## 0. Ask first
+
+Look only enough to fill the defaults (`git rev-parse --show-toplevel`; which of the files in step 2 already exist; the current stool options in `/config`). Then show ONE short menu, as AskUserQuestion choices (multi-select, defaults pre-marked) where that tool is available, else a numbered list the user answers with numbers ("reply `all`, `defaults`, or the numbers"). Each item is one line with its default:
+
+1. **Progress bars** (`planProgress`, on): live plan bars and agent strips above the prompt. Off: no bars, and the `plan_progress` tool is never offered, so it costs no calls.
+2. **Usage strip** (`usageStrip`, on): agents/cap, weekly and 5-hour usage with pace, context percent.
+3. **Keep-warm** (`keepWarm`, on): pings a big idle session so its prompt cache stays warm.
+4. **Guards** (off): `leadGuard` (blocks `git add -A`, `cd` out of the project, shell writes to docs), `dispatchGuard` (standing orders on every agent prompt, the agent cap across sessions), `captureGuard` (breaker on a slow screen-capture tool).
+5. **Restart review tiers** (`reviewTiers`: why-behind every 5th restart, deep review every 10th): say what each does (step 4 below) and ask for the intervals (0 = off).
+6. **Restart threshold**: `restartContextAt` (65 %) and `restartContextTokens` (150000); `restartAtPhaseEnd` (off) adds a restart at each phase end.
+7. **Project files**: `docs/HANDOFF.md`, `HANDOFF-history.md`, `TODO.md`, `FIXES.md`, `restart_count.txt` and the CLAUDE.md bookkeeping lines (steps 2 and 3).
+
+Then apply only what was picked:
+- Options: merge just the changed keys into the user's `~/.claude/settings.json` under `pluginConfigs` → the installed stool entry (`stool@<marketplace>`, as `/plugin` names it; create `{"options": {}}` if absent) → `options`, keeping every other key; show the changed keys in the report. stool reloads on an option change. A user who would rather set them by hand gets the `/config` rows (or the ⚙ settings window, where every one of these is a switch or button).
+- Files: steps 1 to 3 below, only for item 7.
 
 ## 1. Look first
 
@@ -95,9 +111,9 @@ Tell the user in a short block, in these terms:
 > - **deep, every 10th restart**: a review of the last ~10 restarts (where time and tokens went, rules broken twice with no check, stalled tools, drift), written to `docs/research/deep_review_<n>.md` with the top 3 fixes sent to you.
 > Change the intervals (0 = off), rename or add tiers in `/config` → stool → `reviewTiers` (lines like `why-behind every 5`, `goal check: why-behind every 3`), or with the buttons in the settings window's Restarts section. Restarts follow the context threshold; `restartAtPhaseEnd` adds a restart at each phase end.
 
-Then ask once (with the other picks if in step 1b): keep the defaults, or which intervals they want. Don't edit settings files yourself: give the exact `reviewTiers` lines to paste, or point at the settings window buttons.
+This is menu item 5; its answer becomes the `reviewTiers` lines (for example `why-behind every 3`, `deep every 0`), applied as in step 0.
 
 ## 5. Options and report
 
-- If the handoff file or heading differs from the defaults (`HANDOFF.md`, `RESUME HERE`), or the project has a deploy/publish command worth counting, tell the user the `/config` options to set: `restartHandoffLint`, `restartHandoffFile`, `restartHandoffHeading`, `restartPublishCounter` + `restartPublishPattern`. Do not edit settings files yourself.
-- Do not commit unless the user asks. Report in a few lines: files created, sections added to existing files, anything marked `unknown` for the user to fill.
+- If the handoff file or heading differs from the defaults (`HANDOFF.md`, `RESUME HERE`), or the project has a deploy/publish command worth counting, name the options that fit (`restartHandoffLint`, `restartHandoffFile`, `restartHandoffHeading`, `restartPublishCounter` + `restartPublishPattern`) and set them as in step 0 if the user says yes.
+- Do not commit unless the user asks. Report in a few lines: options changed, files created, sections added to existing files, anything marked `unknown` for the user to fill.
