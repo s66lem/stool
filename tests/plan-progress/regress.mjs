@@ -394,6 +394,41 @@ const C = {
     const denied = edits.filter(r => r.deny).length
     return [`tool ${F.toolSpec ? 'on' : 'off'}, rules ${sections.length}, denied ${denied}, stop ${stop.block ? 'blocked' : 'passes'}; on: tool ${E.toolSpec ? 'on' : 'off'}`, !F.toolSpec && sections.length === 0 && denied === 0 && !stop.block && !!E.toolSpec]
   },
+  async toggles_bars_and_strip_off(E) {
+    const texts = n => (Array.isArray(n) ? n.flatMap(texts) : typeof n === 'string' ? [n] : n && typeof n === 'object' ? [n.props?.label, ...(n.children ?? []).flatMap(texts)].filter(Boolean) : [])
+    const H = 3600_000
+    const usage = { cap: 4, weekly: { used: 10, resetAt: E.now() + 9 * H, projected: 20, limitAt: null }, five: { used: 5, resetAt: E.now() + H, projected: 9, limitAt: null } }
+    const B = await boot(file, new Map(), new Map(), { planProgress: false })
+    const U = await boot(file, new Map(), new Map(), { usageStrip: false })
+    for (const X of [E, B, U]) {
+      X.strip('usage-pace', usage)
+      await create(X)
+    }
+    const alts = async X => (await X.svgs()).map(p => p.alt).join('|')
+    const [on, bars, strip] = [await alts(E), await alts(B), await alts(U)]
+    const footer = texts(await B.render('SessionMode')).join('|')
+    const submit = X => X.hooks.find(h => h.event === 'prompt.submit').fn(X.$, { origin: { kind: 'composer' }, text: 'x' }, async e => e)
+    const [lineOn, lineOff] = [(await submit(E)).context ?? [], (await submit(B)).context ?? []]
+    const term = texts(await U.tree('terminal')).join('|')
+    const ok = /Task:/.test(on) && /week/.test(on) && !/Task:/.test(bars) && /week/.test(bars) && /Task:/.test(strip) && !/week/.test(strip) && !footer.includes('Progress') && footer.includes('⚙') && lineOn.length === 1 && lineOff.length === 0 && !/week/.test(term)
+    return [`on ${on.length > 0} | bars-off "${bars.slice(0, 30)}" | strip-off "${strip.slice(0, 30)}" | footer ${footer} | lines ${lineOn.length}/${lineOff.length}`, ok]
+  },
+  async settings_master_switches_and_review_tiers(E) {
+    const find = (n, key) => (Array.isArray(n) ? n.map(c => find(c, key)).find(Boolean) : n && typeof n === 'object' ? (n.props?.key === key ? n : (n.children ?? []).map(c => find(c, key)).find(Boolean)) : undefined)
+    const tree = await E.render('Pane', { requestId: 'settings' })
+    await find(tree, 'planProgress').props.onPress()
+    await find(tree, 'usageStrip').props.onPress()
+    await find(tree, 'tier-0-3').props.onPress()
+    await find(tree, 'tier-1-0').props.onPress()
+    const got = JSON.stringify(E.configSet)
+    const want = JSON.stringify([
+      { key: 'stool.planProgress', value: false },
+      { key: 'stool.usageStrip', value: false },
+      { key: 'stool.reviewTiers', value: ['why-behind every 3', 'deep every 10'] },
+      { key: 'stool.reviewTiers', value: ['why-behind every 5', 'deep every 0'] },
+    ])
+    return [got, got === want && !!find(tree, 'restartAtPhaseEnd')]
+  },
   async stop_still_blocks_open_bar(E) {
     await E.turnStart()
     await create(E)

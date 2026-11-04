@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.15.0",
+  "version": "2.16.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -83,7 +83,13 @@
     "planProgress": {
       "type": "boolean",
       "title": "Progress bars",
-      "description": "The plan_progress tool and its rules. Off: no tool, no prompt rules, no edit gate or Stop block (saves the model's extra calls); the usage and agent strips stay",
+      "description": "The progress bars: the plan_progress tool, its rules, the edit gate and Stop block, and the bars and agent strips drawn above the prompt. Off: none of it, so agents make no extra calls; the usage strip has its own switch",
+      "default": true
+    },
+    "usageStrip": {
+      "type": "boolean",
+      "title": "Usage strip",
+      "description": "Draw the usage strip (agents, weekly and 5-hour usage, keep-warm, context) above the prompt. Off: not drawn; /ribbon still prints its numbers",
       "default": true
     },
     "keepWarm": {
@@ -148,6 +154,22 @@
       "description": "The restart clock also says a restart is due when the main conversation reaches this many context tokens (0 = off). Every message re-reads the whole context, so cost climbs with it",
       "default": 150000,
       "min": 0
+    },
+    "restartAtPhaseEnd": {
+      "type": "boolean",
+      "title": "Restart at phase ends",
+      "description": "Also run the session-restart skill at the end of each phase (told to the model in the system prompt). Off: restarts follow the context threshold (restartContextAt, restartContextTokens), or when you ask",
+      "default": false
+    },
+    "reviewTiers": {
+      "type": "string",
+      "multiple": true,
+      "title": "Restart review tiers",
+      "description": "One line per tier: '[name:] <type> every <N>', type why-behind (goal vs gap check) or deep (deep review), N = every Nth restart (0 = off), counted in docs/restart_count.txt. A due tier goes in front of the resume prompt",
+      "default": [
+        "why-behind every 5",
+        "deep every 10"
+      ]
     },
     "trial": {
       "type": "boolean",

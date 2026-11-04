@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: Set a repo up for long multi-session work with stool (on a project that already has CLAUDE.md, handoff, TODO or notes files it reviews them and proposes only the missing blocks for the user to pick) - docs/HANDOFF.md (one RESUME HERE block), docs/HANDOFF-history.md, docs/TODO.md, docs/FIXES.md, and a bookkeeping section in CLAUDE.md, matched to the restart-clock options. Use when the user runs /project-setup or asks to set a project up for handoffs, session restarts or the stool workflow.
+description: Set a repo up for long multi-session work with stool (on a project that already has CLAUDE.md, handoff, TODO or notes files it reviews them and proposes only the missing blocks for the user to pick) - docs/HANDOFF.md (one RESUME HERE block), docs/HANDOFF-history.md, docs/TODO.md, docs/FIXES.md, docs/restart_count.txt and a bookkeeping section in CLAUDE.md, matched to the restart-clock options, and explains and offers to set the restart review tiers (why-behind every 5th restart, deep review every 10th). Use when the user runs /project-setup or asks to set a project up for handoffs, session restarts or the stool workflow.
 argument-hint: "[one line on what the project is]"
 disable-model-invocation: true
 ---
@@ -68,7 +68,9 @@ Keep proposals proportional: a project whose instructions file is short and casu
 <!-- move finished items here with the date, newest first -->
 ```
 
-**`docs/FIXES.md`**: `# Fixes` and one line: "One dated section per session (`## <date> - <session or phase>`) with **Waste** (ranked, with rough numbers) and **Fixes** (rules or tool changes made). Written by `stool:session-restart`."
+**`docs/FIXES.md`**: `# Fixes` and one line: "One dated section per session (`## <date> - <session or phase>`) with **Waste** (ranked, with rough numbers), **Foot-guns** (what slowed the work, with evidence, each fixed or assigned) and **Fixes** (rules or tool changes made). Written by `stool:session-restart`."
+
+**`docs/restart_count.txt`**: `0`. `stool:session-restart` bumps it at each restart; the review tiers key off it.
 
 ## 3. CLAUDE.md
 
@@ -79,11 +81,23 @@ Fresh project: create the file with a one-line project summary, then this `## Bo
 - Current state: `docs/HANDOFF.md` (the RESUME HERE block). Read it first in every session.
 - Update `docs/TODO.md` and `docs/HANDOFF.md` every time a task finishes and when stopping mid-task; commit them with the work.
 - RESUME HERE is rewritten, never stacked: the old block moves to the top of `docs/HANDOFF-history.md` in the same edit. Times come from `date -u`.
-- At each phase boundary, after a big feedback dump, or when the restart clock says so: run `stool:session-restart` (retrospective into `docs/FIXES.md`, handoff, fresh session).
+- When the restart clock says a restart is due (or the user asks): run `stool:session-restart` (retrospective and lessons pass into `docs/FIXES.md` and the skills' `## Lessons`, handoff, fresh session). `docs/restart_count.txt` counts restarts; every 5th adds a why-behind review and every 10th a deep review in front of the resume prompt (stool option `reviewTiers`).
+- Mistakes made twice become dated one-line lessons in the area's project skill (`## Lessons`, newest first, at most ~15); a lesson hit twice becomes a check script.
 - A rule broken twice goes into a check script, not only into this file.
 ```
 
-## 4. Options and report
+## 4. Review tiers (say this plainly, then offer to set them)
+
+Tell the user in a short block, in these terms:
+
+> **Restart reviews.** Every restart already runs a retrospective with a lessons pass (repeated mistakes become one-line lessons in the area's skill, foot-guns get fixed or assigned). On top of that, stool puts a deeper review in front of the resume prompt on a schedule, counted in `docs/restart_count.txt`:
+> - **why-behind, every 5th restart**: is the main metric closing the gap to its target (in absolute units, and how long since it moved), or is the work just tuning? If the approach can't reach the goal, rethink it and tell you.
+> - **deep, every 10th restart**: a review of the last ~10 restarts (where time and tokens went, rules broken twice with no check, stalled tools, drift), written to `docs/research/deep_review_<n>.md` with the top 3 fixes sent to you.
+> Change the intervals (0 = off), rename or add tiers in `/config` → stool → `reviewTiers` (lines like `why-behind every 5`, `goal check: why-behind every 3`), or with the buttons in the settings window's Restarts section. Restarts follow the context threshold; `restartAtPhaseEnd` adds a restart at each phase end.
+
+Then ask once (with the other picks if in step 1b): keep the defaults, or which intervals they want. Don't edit settings files yourself: give the exact `reviewTiers` lines to paste, or point at the settings window buttons.
+
+## 5. Options and report
 
 - If the handoff file or heading differs from the defaults (`HANDOFF.md`, `RESUME HERE`), or the project has a deploy/publish command worth counting, tell the user the `/config` options to set: `restartHandoffLint`, `restartHandoffFile`, `restartHandoffHeading`, `restartPublishCounter` + `restartPublishPattern`. Do not edit settings files yourself.
 - Do not commit unless the user asks. Report in a few lines: files created, sections added to existing files, anything marked `unknown` for the user to fill.

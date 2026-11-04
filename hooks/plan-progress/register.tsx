@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { SLOT_DEFAULT, expand, flag } from '../config'
+import { SLOT_DEFAULT, expand, flag, parseTiers, tierLine } from '../config'
 import type { AgentRun, Plan, PlanStage, PlanState, PlanStep, StepStatus } from '../../types'
 
 import { ribbonLines, stripCells, stripSvg as usageSvg, stripText as usageText, stripZones } from './strip'
@@ -1522,6 +1522,7 @@ const PARTS: [string, string, string, string, string[]][] = [
   ['ledgerMainTurns', 'Log main turns', 'Adds the main conversation to the agent ledger so the usage_since tool can split lead from agents and calibrate weekly percent. A file write each turn.', 'Usage', []],
   ['usageLog', 'Log meter readings', 'Appends the 5-hour and weekly readings to usage-log.jsonl each time one moves, for calibration. A small write a few times an hour.', 'Usage', []],
   ['restartHandoffLint', 'Handoff lint', 'Warns when a write to the handoff file leaves two headings or a stale time.', 'Restarts', []],
+  ['restartAtPhaseEnd', 'Restart at phase ends', 'Also run session-restart at each phase end, not only when the context threshold says so.', 'Restarts', []],
   ['restartPublishCounter', 'Publish counter', 'Counts runs of a command and says when a restart is due.', 'Restarts', ['restartPublishPattern']],
 ]
 let partsOn: Record<string, boolean> = {}
@@ -1553,7 +1554,7 @@ async function setChoice($: EngineInterface, key: typeof AUTOCLOSE | typeof SPEE
 // written to the settings as /config writes it; the mod then reloads with the new options and the window stays open.
 // A press while a set is on its way is dropped
 let isSettingOption = false
-async function setOption($: EngineInterface, field: string, value: boolean | number) {
+async function setOption($: EngineInterface, field: string, value: boolean | number | string[]) {
   if (isSettingOption) return
   isSettingOption = true
   try {
@@ -1592,6 +1593,9 @@ export const register: Register = (on, options) => {
   isTwinkling = options?.twinkle !== false
   // planProgress off: no tool, no rules, no gate or Stop block (no extra calls); the usage and agent strips stay
   const isBarsOn = options?.planProgress !== false
+  // usageStrip off: the strip above the bars is not drawn (the /ribbon command still answers)
+  const isStripOn = options?.usageStrip !== false
+  const tiers = parseTiers(options?.reviewTiers)
   // per-turn bookkeeping; module variables are fine here, a reload just starts a fresh count
   let workCalls = 0
   let sinceUpdate = 0
@@ -1613,7 +1617,7 @@ export const register: Register = (on, options) => {
   // the rule lives in the cached system prompt; a message only carries one short line when bars are open,
   // and the person answering clears any "needs input" without a model call
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'composer') return next(e)
+    if (!isBarsOn || e.origin.kind !== 'composer') return next(e)
     const list = await read($, plans)
     if (list.some(p => p.state === 'needs_input')) {
       await update($, plans, all => all.map(p => (p.state === 'needs_input' ? { ...p, state: 'running' as const, note: null } : p)))
@@ -1911,12 +1915,12 @@ export const register: Register = (on, options) => {
         ? $.ui.toast('plan-progress is on. A bar appears when Claude starts a task with several steps.')
         : update($, isOpen, () => !open)
 
-    const button = <Button key="progress-toggle" dimColor={count === 0 || !open} label={count > 1 ? `Progress ${count}` : 'Progress'} onPress={press} />
+    const button = !isBarsOn ? null : <Button key="progress-toggle" dimColor={count === 0 || !open} label={count > 1 ? `Progress ${count}` : 'Progress'} onPress={press} />
     const hasGear = e.surface === 'desktop' || e.viewport?.isFullscreen === true
     // alone, the bare Button: wrapped in a Box the desktop dropped it to a row of its own under the footer (2026-10-14).
     // With the gear or the speed figure beside it, the row is zycck's form (a Box of Text, Buttons and what is beneath);
     // Progress stays first, next to the model selector
-    if (!hasGear && !isSpeedShown && (!below || e.props.modes.length === 0)) return button
+    if (!hasGear && !isSpeedShown && (!below || e.props.modes.length === 0)) return button ?? below
     return (
       <Box flexDirection="row" alignItems="center" gap={1}>
         {button}
@@ -1989,6 +1993,7 @@ export const register: Register = (on, options) => {
         {card(
           'Progress bars',
           'above the prompt',
+          row('planProgress', 'Show progress bars', 'The bars, their agent strips and the plan_progress tool. Off: nothing drawn, and no rules or reminders for the model.', sw('planProgress', isBarsOn, () => setOption($, 'planProgress', !isBarsOn))),
           row('autoclose', 'Auto-close finished bars', 'A finished bar leaves on its own; failed or waiting bars stay. Same as /plan-progress-autoclose.', sw(AUTOCLOSE, isAutoClose, () => setChoice($, AUTOCLOSE, !isAutoClose))),
           row(
             'stays',
@@ -2005,6 +2010,7 @@ export const register: Register = (on, options) => {
         {card(
           'Usage strip',
           'what the strip above the bars shows',
+          row('usageStrip', 'Show the usage strip', 'Off: the strip is not drawn; /ribbon still prints what it would show.', sw('usageStrip', isStripOn, () => setOption($, 'usageStrip', !isStripOn))),
           ...STRIP_OPTIONS.map(([k, field, title, about]) => (
             <Box key={`strip-${k}`} flexDirection="row" alignItems="center" gap={1} marginTop={1}>
               <Box flexGrow={1} flexShrink={1} flexDirection="row" gap={1}>
@@ -2022,7 +2028,23 @@ export const register: Register = (on, options) => {
         )}
         {card('Agents', 'off until switched on; patterns and names are in /config', ...part('Agents'))}
         {card('Usage ledger', 'for the usage_since tool; off until switched on', ...part('Usage'))}
-        {card('Restarts', 'off until switched on', ...part('Restarts'))}
+        {card(
+          'Restarts',
+          'reviews put in front of the resume prompt, every Nth restart; the rest off until switched on',
+          ...tiers.map((t, i) =>
+            row(
+              `tier-${i}`,
+              `Review: ${t.name}`,
+              t.type === 'deep' ? 'Deep review of the last restarts: waste, repeated slips, stalled tools, drift into tuning, lessons.' : 'Goal against gap: is the work closing the measured gap, or tuning? Rethink if it cannot reach the goal.',
+              <Box key={`tier-${i}`} flexDirection="row" flexShrink={0}>
+                {[...new Set([0, 3, 5, 10, 20, t.every])].sort((a, b) => a - b).map(k => (
+                  <Button key={`tier-${i}-${k}`} dimColor={k !== t.every} {...(k === t.every ? { variant: 'primary' as const } : { plain: true })} label={k === 0 ? 'Off' : `${k}`} onPress={() => setOption($, 'reviewTiers', tiers.map((x, j) => tierLine(j === i ? { ...x, every: k } : x)))} />
+                ))}
+              </Box>,
+            ),
+          ),
+          ...part('Restarts'),
+        )}
         <Box key="about" flexDirection="column" marginTop={1}>
           <Text bold>About</Text>
           <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT)`}</Text>
@@ -2037,7 +2059,7 @@ export const register: Register = (on, options) => {
     band = null
     if (e.props.hasSurvey) return next(e)
     const all = await read($, plans)
-    const list = (await read($, isOpen)) ? all : []
+    const list = isBarsOn && (await read($, isOpen)) ? all : []
     const t = $.ui.resolve(e)
     const { Box, Button, Text } = t
     // the terminal's table can carry an Svg too (2.1.295) and draws it as nothing: the surface decides, not the table
@@ -2052,7 +2074,7 @@ export const register: Register = (on, options) => {
     const usageScale = 20 / 24
     const usageH = 18
     const extra = await stripExtra($, stripNow)
-    const usageSource = usageSvg(usage, warm, total, stripNow, usageScale, usageH, extra)
+    const usageSource = isStripOn ? usageSvg(usage, warm, total, stripNow, usageScale, usageH, extra) : ''
     const usageAlt = usageText(usage, warm, stripNow, extra)
     // one hover zone per strip item; its card (the labels in the numbers' colours, then the mod in grey) lies over the
     // row after a 0.5 s rest. A Box hover has no delay and runs no hook, so the cards live in a see-through interactive
@@ -2117,7 +2139,7 @@ export const register: Register = (on, options) => {
     await read($, tick)
     const now = await $.clock.now()
     // no Svg on this surface (the terminal): the same band in text
-    if (!Svg) return termBand($, { ui: { Box, Text, Button, Raster }, cols: Math.max(40, (e.props.bodyColumns || 80) - 2), list, usage: stripCells(usage, warm, stripNow, extra), now, calls, requestId: e.requestId, clicks: e.viewport?.isFullscreen === true })
+    if (!Svg) return termBand($, { ui: { Box, Text, Button, Raster }, cols: Math.max(40, (e.props.bodyColumns || 80) - 2), list, usage: isStripOn ? stripCells(usage, warm, stripNow, extra) : [], now, calls, requestId: e.requestId, clicks: e.viewport?.isFullscreen === true })
     // a hairline between task bars, so each bar and its agent strips read as one group
     const divider = `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="1"><rect width="${total}" height="1" fill="#808080" fill-opacity=".22"/></svg>`
 

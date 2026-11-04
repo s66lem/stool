@@ -1,5 +1,7 @@
 import type { Register, ToolSpec } from 'claude-code'
 
+import { type Tier, dueTiers, parseTiers } from '../config'
+
 const TOOL = 'mcp__stool__restart_session'
 
 // The prompt waiting for the turn to end; module state is fine, /clear doesn't reload the module.
@@ -34,7 +36,29 @@ export const RELOAD_TOOL: ToolSpec = {
   isDeferred: true,
 }
 
-export const register: Register = on => {
+// the standing lessons pass: every session-restart retrospective runs it; a review tier runs it deeper
+export const LESSONS =
+  "Lessons pass: turn each mistake made more than once into a dated one-line lesson in the `## Lessons` list of the project skill for that area (newest first, at most ~15: merge duplicates, fold durable ones into the skill's rules, drop stale ones). Where an area keeps needing the same instructions and has no skill, propose a new project skill to the user. A lesson hit twice becomes a check script, not more prose. Foot-guns: list what slows the work, each with its evidence (a time, a token count, a commit), and fix or assign each one."
+
+const TIER_TEXT: Record<Tier['type'], (t: Tier, n: number) => string> = {
+  'why-behind': (t, n) =>
+    `Why-behind review ("${t.name}", restart ${n}, every ${t.every}): check the goal against the gap before continuing. For each goal metric the project tracks: its value now vs the target in absolute units, and how long since it last moved (handoff history, commits, results). Is the current work attacking the measured gap, or tuning around it? If the approach cannot reach the goal at its present rate, rethink the approach instead of tuning it. Tell the user the decision in two lines (with the project's notify command if they are away). Run the lessons pass over the last ${t.every} restarts.`,
+  deep: (t, n) =>
+    `Deep review ("${t.name}", restart ${n}, every ${t.every}): read the last ~${t.every} restarts' handoff history, the fix log, the project's skills with their Lessons, and the results. Find where time, tokens and tries went against the progress they bought, rules broken more than once that still have no check script, tools that broke or stalled, and work that drifted into small tuning. Write \`docs/research/deep_review_${n}.md\` with ranked fixes, the lessons pass (consolidate every skill's Lessons) and a foot-guns section; apply the cheap fixes, and send the user the top 3 with the project's notify command. Run it inline; dispatching strong-model agents for it needs the user's OK.`,
+}
+
+// the resume prompt with the review tiers due at restart `n` in front of it; unchanged when none is due
+export function withReviews(prompt: string, tiers: Tier[], n: number) {
+  const due = dueTiers(tiers, n)
+  if (due.length === 0) return { text: prompt, due }
+  const text = [`Restart ${n}: a review is due first (stool option reviewTiers), then the task below.`, ...due.map(t => TIER_TEXT[t.type](t, n)), LESSONS, `Then: ${prompt}`].join('\n\n')
+  return { text, due }
+}
+
+export const COUNT_FILE = 'docs/restart_count.txt'
+
+export const register: Register = (on, options) => {
+  const tiers = parseTiers(options?.reviewTiers)
   on('session.start', { cwd: /[^]*|a{6}/ }, async ($, e, next) => {
     await $.tool.register(RESTART_TOOL)
     await $.tool.register(RELOAD_TOOL)
@@ -49,7 +73,11 @@ export const register: Register = on => {
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const prompt = (e as unknown as { prompt?: unknown }).prompt
     if (typeof prompt !== 'string' || !prompt.trim()) return { deny: 'restart_session: prompt is required.' }
-    pending = prompt
+    // the restart's number, bumped by session-restart in its handoff commit; a due tier goes in front of the prompt
+    const cwd = await Promise.resolve().then(() => $.session.cwd()).catch(() => '.')
+    const n = parseInt(await Promise.resolve().then(() => $.fs.read(`${cwd}/${COUNT_FILE}`)).catch(() => ''), 10)
+    const r = withReviews(prompt, tiers, Number.isFinite(n) ? n : 0)
+    pending = r.text
     const m = (e as unknown as { model?: unknown }).model
     model = undefined
     let note = ''
@@ -59,7 +87,8 @@ export const register: Register = on => {
         note = ` The model switches to ${model} before the prompt.`
       } else note = ' The model was not changed (unrecognised model name).'
     }
-    return { result: `Restart queued: /clear and the resume prompt run when this turn ends.${note} End the turn now.` }
+    const review = r.due.length ? ` Restart ${n}: ${r.due.map(t => t.name).join(' + ')} review added in front of the prompt.` : ''
+    return { result: `Restart queued: /clear and the resume prompt run when this turn ends.${review}${note} End the turn now.` }
   })
 
   on('turn.complete', { reason: /[^]*|a{7}/ }, async ($, e, next) => {

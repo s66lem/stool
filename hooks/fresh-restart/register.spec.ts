@@ -1,5 +1,8 @@
 import { expect, mock, test, tier } from 'claude-code/testing'
 
+import { TIERS_DEFAULT, dueTiers, parseTiers, tierLine } from '../config'
+import { withReviews } from './register'
+
 tier('user')
 
 test('restart_session: clear, then /model, then the prompt; no model means no /model; a bad name is refused', async ($, on) => {
@@ -41,4 +44,46 @@ test('reload_plugins: when /reload-plugins is refused remotely, bumping an optio
   await clock.advance(2000)
   expect(seen[0]).toEqual(['stool.reloadNonce', 5001])
   expect(String(seen[1])).toContain('stool reloaded')
+})
+
+test('review tiers: parsed from the option lines, due on multiples of their interval, 0 = off', () => {
+  expect(parseTiers(undefined).map(tierLine)).toEqual(TIERS_DEFAULT)
+  const t = parseTiers(['goal: why-behind every 2', 'deep every 0', 'junk', 'Deep EVERY 3'])
+  expect(t.map(tierLine)).toEqual(['goal: why-behind every 2', 'deep every 0', 'deep every 3'])
+  expect(dueTiers(t, 6).map(x => x.name)).toEqual(['goal', 'deep'])
+  expect(dueTiers(t, 5)).toEqual([])
+  expect(dueTiers(t, 0)).toEqual([])
+  const d = parseTiers(undefined)
+  expect([1, 4, 5, 9, 10].map(n => dueTiers(d, n).map(x => x.type).join('+'))).toEqual(['', '', 'why-behind', '', 'why-behind+deep'])
+  expect(withReviews('go', d, 3).text).toBe('go')
+  const ten = withReviews('go', d, 10).text
+  expect(ten).toContain('Why-behind review')
+  expect(ten).toContain('Deep review')
+  expect(ten).toContain('Lessons pass')
+  expect(ten.endsWith('Then: go')).toBe(true)
+})
+
+test('restart_session reads docs/restart_count.txt and puts the due review in front of the resume prompt', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  let count = '5\n'
+  const reads: string[] = []
+  const seen: string[] = []
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: 'C:' + String.fromCharCode(92) + 'x' }) as never)
+  on('fs.read', (_$, e: any) => { reads.push(e.path); return { value: count } as never })
+  on('tool.register', (_$, e) => ({ value: { tool: e.name } }))
+  on('command.run', () => ({ text: '' }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('prompt.submit', (_$, e) => { seen.push(e.text); return { text: e.text } })
+  await $.session.start({ surface: null, isInteractive: false, cwd: 'C:/x' })
+  for (const [c, has] of [['5\n', 'Why-behind review'], ['7', null]] as const) {
+    count = c
+    seen.length = 0
+    const r = await $.tool.call({ tool: 'mcp__stool__restart_session', prompt: 'go' } as never)
+    expect(String(r.result).includes('review added')).toBe(has !== null)
+    await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+    await clock.advance(2000)
+    expect(has === null ? seen[0] === 'go' : seen[0]!.includes(has) && seen[0]!.endsWith('Then: go')).toBe(true)
+  }
+  expect(reads[0]!.split(String.fromCharCode(92)).join('/')).toBe('C:/x/docs/restart_count.txt')
 })

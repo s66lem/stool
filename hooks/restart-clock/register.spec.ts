@@ -137,3 +137,21 @@ test('trial off arm: the token threshold is off (200k does not make a restart du
   const ctx = (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
   expect(ctx.length).toBe(0)
 })
+
+test('restartAtPhaseEnd off by default: no phase-end line in the system prompt', async ($, on) => {
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 's1' }) as never)
+  on('prompt.compose', () => ({ sections: [] }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const composed = await $.prompt.compose({ promptModel: 'claude-opus-5-5', surfaces: [], tools: [], outputStyle: null, traits: [] } as never)
+  expect(composed.sections.some(x => x.id === 'restart-clock:phase-end')).toBe(false)
+})
+
+test('restartAtPhaseEnd on: the phase-end rule is in the system prompt', { options: { ...OPT.options, restartAtPhaseEnd: true } }, async ($, on) => {
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 's1' }) as never)
+  on('prompt.compose', () => ({ sections: [] }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const composed = await $.prompt.compose({ promptModel: 'claude-opus-5-5', surfaces: [], tools: [], outputStyle: null, traits: [] } as never)
+  expect(composed.sections.some(x => x.id === 'restart-clock:phase-end' && x.text.includes('session-restart'))).toBe(true)
+})

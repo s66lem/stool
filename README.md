@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.15.0-4FC27A.svg)
+![Version](https://img.shields.io/badge/version-2.16.0-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -52,7 +52,7 @@ Answer `y` to add the marketplace, pick a scope, then set the options (every one
 | Usage strip | yes | A strip above the bars: running agents / agent cap (`1+2/4` is one cheap Haiku agent plus two counted Sonnet/Opus against a cap of four), weekly and 5-hour usage with the pace, keep-warm state, context percent, tokens per second. |
 | Usage pace (`usage-pace`) | yes | Computes the agent cap from the 5-hour and weekly windows, and toasts when the 5-hour limit would be hit early. Tool `agent_cap`. |
 | Keep-warm (`keep-warm`) | yes | Pings a big idle session every 50 minutes so its one-hour prompt cache stays warm, up to 15 pings in a row, only above 100k tokens of context and below 95% of any limit. Command `/keepwarm off\|on\|<count>`. |
-| Restart tools (`fresh-restart`) | yes | `restart_session` (`/clear` plus a resume prompt in the same session, once the turn ends) and `reload_plugins`. |
+| Restart tools (`fresh-restart`) | yes | `restart_session` (`/clear` plus a resume prompt in the same session, once the turn ends; a review tier due at this restart goes in front of the prompt, see `reviewTiers`) and `reload_plugins`. |
 | Restart clock (`restart-clock`) | context part: yes | Says (a note on a tool result, red on the strip) when the main conversation reaches `restartContextAt` percent of context. Opt-in extras: a publish counter and a handoff-file lint. |
 | Agent meter (`agent-meter`) | yes | Counts each subagent's tool calls against the cap its prompt states ("about 40 tool calls"), toasts once over it, and appends one line per finished agent to a ledger file (with its four token counts, id and session). Tools `usage_since` and `outcomes` (weekly % and commits per project, and the cost of one commit). |
 | Dispatch guard (`dispatch-guard`) | no | Appends standing orders to every Agent prompt, can require a tool-call cap on prompts matching a pattern, and holds expensive agents to the agent cap across all your sessions (through a shared slot file; Haiku and `dispatchCheapAgents` types are not counted, and an agent resumed with SendMessage takes its slot again). |
@@ -71,7 +71,8 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `projectRoots` | empty | Folders (with their subfolders) where the folder-scoped parts run: keep-warm, agent-meter, restart-clock, and the guards. Empty = every folder. |
 | `doneBarSeconds` | 30 | Seconds a finished progress bar stays while auto-close (`/plan-progress-autoclose`) is on. |
 | `twinkle` | true | Animate the dots of the terminal bar while Claude works. |
-| `planProgress` | true | The progress bars' `plan_progress` tool and its rules. Off: no tool, no prompt rules, no edit gate or Stop block, so agents make no extra calls; the usage and agent strips stay. |
+| `planProgress` | true | The progress bars. Off: no bars or agent strips drawn, no Progress button in the footer, no `plan_progress` tool, no prompt rules, reminders, edit gate or Stop block, so the model makes no extra calls. The usage strip has its own switch. Also a switch in the settings window. |
+| `usageStrip` | true | The usage strip (the ribbon above the bars). Off: not drawn on any surface; `/ribbon` still prints its numbers on request. Also a switch in the settings window. |
 | `keepWarm` | true | Master switch for keep-warm. |
 | `stripAgents`, `stripWeekly`, `stripFive`, `stripWarm`, `stripContext` | true | Which groups the usage strip draws: agents / cap, weekly usage, 5-hour usage, keep-warm, context. Also switches in the settings window. |
 | `stripCodex` | true | Show the Codex agents running (`cx1`, teal, after the agent count): the Codex plugin's agents run on OpenAI, so they are listed apart and never count against the agent cap. Needs the dispatch guard. |
@@ -84,6 +85,8 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
 | `restartContextAt` | 65 | Context percent at which a restart is due. |
 | `restartContextTokens` | 150000 | Context tokens at which a restart is due too (0 = off); re-said every 50k after. |
+| `restartAtPhaseEnd` | false | Also restart at the end of each phase (a line in the system prompt tells the model). Off, restarts follow the context threshold above, or happen when you ask. |
+| `reviewTiers` | `why-behind every 5`, `deep every 10` | Restart review tiers, one line each: `[name:] <type> every <N>` (N = every Nth restart, 0 = off; unparsable lines are skipped). `restart_session` reads `docs/restart_count.txt` and puts each due tier's instructions in front of the resume prompt. Types: `why-behind` (each goal metric vs its target in absolute units, time since it last moved, is the work closing the gap or tuning; rethink if it can't reach the goal, tell the user the decision) and `deep` (the last N restarts' handoffs, fix log, lessons and results: waste, rules broken twice with no check, stalled tools, drift; writes `docs/research/deep_review_<n>.md`, sends the top 3). Both carry the lessons pass and a foot-guns section. The settings window's Restarts section sets each tier's interval with buttons. |
 | `trial` | off | Randomized trial of the cost levers on your own sessions. With it on, `trialOffShare` percent (default 20) of sessions, chosen by session id, run with the token restart nudge, the default agent cap and the governor off; each session's arm goes to `~/.claude/stool/trial.jsonl`. After a week or two, `node bench/trial.mjs` compares cost per commit between the arms. |
 | `governor` | on | While the 5-hour or weekly window would run out early, lowers the restart threshold (150k, then 100k, then 75k) and the default agent tool-call cap (80, then 60, then 40). It changes neither models nor quality, only how soon a long context or a long agent is cut. |
 | `agentCallCap` | 80 | Tool calls an agent gets when its prompt states no cap (0 = off). Past it, an unfinished agent writes a handoff to `~/.claude/stool/relay/` and ends with `RELAY: <file>`; the lead is told to continue in a fresh agent that reads it (relay: the new agent starts small instead of carrying everything the first one read). Tools stop a quarter past the cap. |
@@ -107,7 +110,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `restartHandoffHeading` | `RESUME HERE` | Heading text (after `## `) of the block rewritten on each restart. |
 | `restartRewriteCommand` | empty | Regex source for a shell command that rewrites the handoff block (resets the counter like an Edit or Write of it). |
 
-The settings window (`/plan-progress-settings`, or the gear in the footer) shows the running agents and has the bar, footer, agent and restart switches in grouped sections, with a note when a part still needs a `/config` value; the patterns and paths are edited in `/config`.
+The settings window (`/plan-progress-settings`, or the gear in the footer) shows the running agents and has the bar, strip, footer, agent and restart switches in grouped sections (including the progress bars and usage strip on/off switches and each review tier's interval), with a note when a part still needs a `/config` value; the patterns and paths are edited in `/config`.
 
 ## Commands
 
@@ -178,7 +181,18 @@ Manual workflow skills, invoked as `stool:<name>`: `plan-progress` (reference fo
 
 ### The session loop
 
-`/stool:project-setup` once per repo, then: work → the strip turns the context red (or the publish counter trips) → `/stool:session-restart` writes the retrospective and the handoff and clears into a fresh session that reads `RESUME HERE` and carries on. Long projects run for days this way without autocompact losing the thread.
+`/stool:project-setup` once per repo, then: work → the strip turns the context red (or the publish counter trips; phase ends too with `restartAtPhaseEnd`) → `/stool:session-restart` writes the retrospective and the handoff and clears into a fresh session that reads `RESUME HERE` and carries on. Long projects run for days this way without autocompact losing the thread.
+
+### Retrospectives, lessons and review tiers
+
+Every restart's retrospective (in `docs/FIXES.md`) lists waste, foot-guns (what slowed the work, with evidence, each fixed or assigned) and fixes, and runs the lessons pass: a mistake made more than once becomes a dated one-line lesson in the `## Lessons` list of the project skill for that area (newest first, at most ~15), an area that keeps needing the same instructions gets a proposed new project skill, and a lesson hit twice becomes a check script.
+
+The review tiers are deeper looks on a schedule. `docs/restart_count.txt` counts restarts (session-restart bumps it); when the count is a multiple of a tier's interval, `restart_session` puts that tier in front of the resume prompt, so the fresh session does it first:
+
+- **why-behind**, every 5th restart by default: is the goal metric closing its gap (absolute units, time since it last moved), or is the work tuning around it? Rethink the approach if it can't get there, and tell the user.
+- **deep**, every 10th: a review of the last ten restarts (waste against progress, repeated slips with no check script, stalled tools, drift), written to `docs/research/deep_review_<n>.md`, with lessons consolidated and the top 3 fixes sent to the user.
+
+Set them in `/config` → stool → `reviewTiers` (`deep every 20`, `goal: why-behind every 3`, `deep every 0` to turn one off) or with the interval buttons in the settings window.
 
 ## State and files
 

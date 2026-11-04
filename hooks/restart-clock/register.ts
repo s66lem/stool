@@ -88,6 +88,14 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // opt-in: restarts at phase ends too, not only at the context threshold
+  const phaseEnd = flag(options, 'restartAtPhaseEnd')
+  on('prompt.compose', { promptModel: /[^]*|a{15}/ }, async ($, e, next) => {
+    const r = await next(e)
+    if (!phaseEnd || !s.scoped) return r
+    return { sections: [...r.sections, { id: 'restart-clock:phase-end', text: 'Phase-end restarts are on (stool option restartAtPhaseEnd): run the stool:session-restart skill at the end of each phase, as well as when the restart clock says a restart is due.', scope: 'session' as const }] }
+  })
+
   on('classic.SessionStart', { source: /[^]*|a{43}/ }, async ($, e, next) => {
     const r = await next(e)
     if (s.scoped && e.source === 'clear') {

@@ -29,3 +29,14 @@ export const inScope = (cwd, rs) => rs.length === 0 || rs.some(r => (norm(cwd) +
 // pure: the 2.1.295 module compiler refuses $ passed into an imported function
 export const expand = (home, p) => p.startsWith("~") ? (home ?? "").split(String.fromCharCode(92)).join("/") + p.slice(1) : p;
 export const SLOT_DEFAULT = '~/.claude/stool/agent-slots.json';
+export const TIERS_DEFAULT = ['why-behind every 5', 'deep every 10'];
+const TIER_RE = /^\s*(?:([^:]+?)\s*:\s*)?(why-behind|deep)\s+every\s+(\d+)\s*$/i;
+export const parseTiers = (lines) => (Array.isArray(lines) ? lines : TIERS_DEFAULT).flatMap(l => {
+    const m = typeof l === 'string' ? l.match(TIER_RE) : null;
+    if (!m)
+        return [];
+    const type = m[2].toLowerCase();
+    return [{ name: m[1]?.trim() || type, type, every: Number(m[3]) }];
+});
+export const tierLine = (t) => `${t.name === t.type ? '' : `${t.name}: `}${t.type} every ${t.every}`;
+export const dueTiers = (tiers, n) => (n > 0 ? tiers.filter(t => t.every > 0 && n % t.every === 0) : []);

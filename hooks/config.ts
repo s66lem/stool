@@ -37,3 +37,19 @@ export const inScope = (cwd: string, rs: readonly string[]) => rs.length === 0 |
 export const expand = (home: string | undefined, p: string): string =>
   p.startsWith("~") ? (home ?? "").split(String.fromCharCode(92)).join("/") + p.slice(1) : p
 export const SLOT_DEFAULT = '~/.claude/stool/agent-slots.json'
+
+// review tiers (`reviewTiers` option): lines "[name:] <type> every <N>", type why-behind or deep, N = every Nth restart
+// (0 = off). Unparsable lines are skipped. A restart whose count is a multiple of N runs that tier
+export type ReviewType = 'why-behind' | 'deep'
+export type Tier = { name: string; type: ReviewType; every: number }
+export const TIERS_DEFAULT = ['why-behind every 5', 'deep every 10']
+const TIER_RE = /^\s*(?:([^:]+?)\s*:\s*)?(why-behind|deep)\s+every\s+(\d+)\s*$/i
+export const parseTiers = (lines: unknown): Tier[] =>
+  (Array.isArray(lines) ? lines : TIERS_DEFAULT).flatMap(l => {
+    const m = typeof l === 'string' ? l.match(TIER_RE) : null
+    if (!m) return []
+    const type = m[2]!.toLowerCase() as ReviewType
+    return [{ name: m[1]?.trim() || type, type, every: Number(m[3]) }]
+  })
+export const tierLine = (t: Tier) => `${t.name === t.type ? '' : `${t.name}: `}${t.type} every ${t.every}`
+export const dueTiers = (tiers: Tier[], n: number) => (n > 0 ? tiers.filter(t => t.every > 0 && n % t.every === 0) : [])
