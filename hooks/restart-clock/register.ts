@@ -36,17 +36,23 @@ export function lintHandoff(body: string, now: number, heading = 'RESUME HERE'):
 }
 
 // `ctxAt` and `limit` (the publish count that makes a restart due; Infinity = counter off) come from the options
-type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; base: number; governor: boolean; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
+type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; warnTok: number; base: number; governor: boolean; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
 const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit
 
 function publish($: EngineInterface, s: S) {
   const strip: RestartStrip = { ctx: s.ctx, publishes: s.publishes, due: due(s) }
   void $.state.set(STRIP, strip)
+  const tok = s.tokens ?? 0
+  // the context shrank since the last nudge (a /clear or compaction whose low reading was never seen): a new due period,
+  // else nagAt, set from the old bigger context, keeps the clock silent until the new one passes it (seen 2026-11-07: nudges at
+  // 331k and 378k, then none by 402k, with the threshold at 275k)
+  if (s.warned && tok < s.warnTok) s.warned = false
   if (!strip.due) s.warned = false
-  else if (!s.warned || (s.tokens ?? 0) >= s.nagAt) {
+  else if (!s.warned || tok >= s.nagAt) {
     s.warned = true
     s.note = true
-    s.nagAt = (s.tokens ?? 0) + RENAG
+    s.warnTok = tok
+    s.nagAt = tok + RENAG
   }
 }
 
@@ -68,7 +74,7 @@ async function readCtx($: EngineInterface, s: S) {
 export const register: Register = (on, options) => {
   const counter = flag(options, 'restartPublishCounter') && text(options, 'restartPublishPattern') !== ''
   const ctxAt = num(options, 'restartContextAt', CTX_AT)
-  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, base: num(options, 'restartContextTokens', CTX_TOKENS), governor: options?.governor !== false, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
+  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, warnTok: 0, base: num(options, 'restartContextTokens', CTX_TOKENS), governor: options?.governor !== false, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
   const publishRe = pattern(text(options, 'restartPublishPattern'))
   const lint = flag(options, 'restartHandoffLint')
   const file = esc(text(options, 'restartHandoffFile', 'HANDOFF.md'))
@@ -98,11 +104,14 @@ export const register: Register = (on, options) => {
 
   on('classic.SessionStart', { source: /[^]*|a{43}/ }, async ($, e, next) => {
     const r = await next(e)
-    if (s.scoped && e.source === 'clear') {
+    if (e.source === 'clear' || e.source === 'compact') {
       s.ctx = null
       s.tokens = null
       s.publishes = 0
-      publish($, s)
+      s.warned = false
+      s.note = false
+      s.nagAt = s.warnTok = 0
+      if (s.scoped) publish($, s)
     }
     return r
   })

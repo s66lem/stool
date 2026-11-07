@@ -155,3 +155,52 @@ test('restartAtPhaseEnd on: the phase-end rule is in the system prompt', { optio
   const composed = await $.prompt.compose({ promptModel: 'claude-opus-5-5', surfaces: [], tools: [], outputStyle: null, traits: [] } as never)
   expect(composed.sections.some(x => x.id === 'restart-clock:phase-end' && x.text.includes('session-restart'))).toBe(true)
 })
+
+const OWNER = { options: { ...OPT.options, restartContextTokens: 275_000, governor: false } }
+
+test('owner config (275k, governor off): 280k tokens of a 1M window make a restart due; a /clear resets and it fires again', OWNER, async ($, on) => {
+  let tokens = 100_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  on('classic.SessionStart', () => ({}) as never)
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  const turn = () => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  await turn()
+  expect((await notes()).length).toBe(0)
+  tokens = 280_000
+  await turn()
+  expect((await notes())[0]).toContain('280k tokens')
+  tokens = 330_000 // 50k later: re-said
+  await turn()
+  expect((await notes()).length).toBe(1)
+  // /clear: the context restarts small, and the next climb to 280k is told again
+  await $.classic.SessionStart({ source: 'clear' } as never)
+  tokens = 20_000
+  await turn()
+  expect((await notes()).length).toBe(0)
+  tokens = 280_000
+  await turn()
+  expect((await notes())[0]).toContain('280k tokens')
+})
+
+test('owner config: a context that shrinks without a low reading in between (clear, compaction) is nudged again at 275k, not at the old nagAt', OWNER, async ($, on) => {
+  let tokens = 100_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  const turn = () => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  tokens = 450_000 // an earlier, bigger context was nudged: nagAt is now 500k
+  await turn()
+  expect((await notes()).length).toBe(1)
+  tokens = 280_000 // the next context, first seen already over the threshold
+  await turn()
+  expect((await notes())[0]).toContain('280k tokens')
+})
