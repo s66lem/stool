@@ -29,12 +29,12 @@ test('restart_session: clear, then /model, then the prompt; no model means no /m
   expect(bad.result).toContain('model was not changed')
 })
 
-test('reload_plugins: when /reload-plugins is refused remotely, bumping an option reloads the plugin instead', async ($, on) => {
+test('reload_plugins: always bumps the reloadNonce option, never runs /reload-plugins', async ($, on) => {
   const clock = mock.clock(on, { now: 5_000_000 })
   const seen: unknown[] = []
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('tool.register', (_$, e) => ({ value: { tool: e.name } }))
-  on('command.run', () => ({ text: 'reload-plugins is not available through a remote session' }) as never)
+  on('command.run', (_$, e: any) => { seen.push(['command', e.command]); return { text: '' } as never })
   on('config.set', (_$, e: any) => { seen.push([e.key, e.value]); return { value: e.value } as never })
   on('ui.toast', (_$, e: any) => { seen.push(e.text); return { value: undefined } as never })
   on('turn.complete', (_$, e) => ({ text: e.answer }))
