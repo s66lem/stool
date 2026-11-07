@@ -1,6 +1,7 @@
 import type { Register, ToolSpec } from 'claude-code'
 
 import { type Tier, dueTiers, parseTiers } from '../config'
+import { RELOAD_STAMP } from '../reload-stamp'
 
 const TOOL = 'mcp__stool__restart_session'
 
@@ -8,10 +9,13 @@ const TOOL = 'mcp__stool__restart_session'
 let pending: string | undefined
 // optional model for /model, run after the clear and before the prompt
 let model: string | undefined
-// reload_plugins was called: the reloadNonce option is bumped when the turn ends, which reloads stool
-// (/reload-plugins cannot be typed over Remote Control, and Claude cannot drive its own window)
+// reload_plugins rewrites hooks/reload-stamp.ts: the plugin watcher (CLAUDE_CODE_PLUGIN_DIR_WATCH) reloads the module
+// when a source file changes, before the next stool tool or at turn end. Works over Remote Control, where
+// /reload-plugins is refused. ($.config.set cannot do it: the engine lists no row for the plugin's options, so
+// 'stool.reloadNonce' is rejected; found 2026-11-07.)
 const RELOAD = 'mcp__stool__reload_plugins'
-let reload = false
+// local runtime state (skip-worktree in git); the number means nothing, only that the file changed
+const WRITE_STAMP = "require('fs').writeFileSync(process.argv[1], 'export const RELOAD_STAMP = ' + Date.now() + ' // rewritten by reload_plugins')"
 
 export const RESTART_TOOL: ToolSpec = {
   name: 'restart_session',
@@ -31,7 +35,7 @@ export const RESTART_TOOL: ToolSpec = {
 export const RELOAD_TOOL: ToolSpec = {
   name: 'reload_plugins',
   description:
-    'Reloads stool once the current turn ends by bumping its reloadNonce option (works locally and over Remote Control), so stool edits load without the user typing /reload-plugins. Reloads stool only, not other plugins. Call it only when the user asked for a reload or for a stool change to take effect.',
+    'Reloads stool once the current turn ends by rewriting a source file the plugin watcher reloads on (works locally and over Remote Control), so stool edits load without the user typing /reload-plugins. Reloads stool only, not other plugins. Call it only when the user asked for a reload or for a stool change to take effect.',
   inputSchema: { type: 'object', properties: {} },
   isDeferred: true,
 }
@@ -65,9 +69,10 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('tool.call', { tool: RELOAD }, async () => {
-    reload = true
-    return { result: 'Reload queued: stool reloads (reloadNonce bump) when this turn ends.' }
+  on('tool.call', { tool: RELOAD }, async $ => {
+    const res = await $.process.run(['node', '-e', WRITE_STAMP, $.plugin.root + '/hooks/reload-stamp.ts']).catch((err: unknown) => ({ exitCode: -1, stderr: String(err) }))
+    if (res.exitCode !== 0) return { result: `Reload failed: could not rewrite reload-stamp.ts (${String(res.stderr).trim().slice(0, 200)}).` }
+    return { result: `Reload queued: stool reloads (reload-stamp rewritten, was ${RELOAD_STAMP}) before the next stool tool call or when this turn ends.` }
   })
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
@@ -93,18 +98,6 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', { reason: /[^]*|a{7}/ }, async ($, e, next) => {
     const done = await next(e)
-    if (reload) {
-      reload = false
-      // always bump the nonce: a changed option reloads stool, local or over Remote Control.
-      // /reload-plugins is refused remotely and its refusal text never reached us (owner, 2026-11-07)
-      $.clock.after(1000, async () => {
-        const n = Math.floor((await $.clock.now()) / 1000)
-        await $.config
-          .set({ key: 'stool.reloadNonce', value: n })
-          .then(r => $.ui.toast(r.deny ? `reload failed: ${r.deny}` : 'stool reloaded'))
-          .catch((err: unknown) => $.ui.toast(`reload failed: ${String(err)}`))
-      })
-    }
     if (pending === undefined) return done
     const text = pending
     pending = undefined

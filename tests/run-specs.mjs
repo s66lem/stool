@@ -18,6 +18,7 @@ for (const m of mods) {
   for (const d of ['sounds', 'assets', 'skills']) if (existsSync(join(root, d))) cpSync(join(root, d), join(tmp, d), { recursive: true })
   cpSync(join(root, 'hooks', m), join(tmp, 'hooks', m), { recursive: true })
   cpSync(join(root, 'hooks/config.ts'), join(tmp, 'hooks/config.ts'))
+  cpSync(join(root, 'hooks/reload-stamp.ts'), join(tmp, 'hooks/reload-stamp.ts'))
   renameSync(join(tmp, 'hooks', m, 'register.spec.ts'), join(tmp, 'hooks', m, 'register.test.ts'))
   const ext = existsSync(join(tmp, 'hooks', m, 'register.tsx')) ? 'tsx' : 'ts'
   writeFileSync(join(tmp, 'hooks/hooks.json'), JSON.stringify({ modules: [`./${m}/register.${ext}`] }))

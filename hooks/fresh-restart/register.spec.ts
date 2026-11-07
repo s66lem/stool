@@ -29,21 +29,21 @@ test('restart_session: clear, then /model, then the prompt; no model means no /m
   expect(bad.result).toContain('model was not changed')
 })
 
-test('reload_plugins: always bumps the reloadNonce option, never runs /reload-plugins', async ($, on) => {
-  const clock = mock.clock(on, { now: 5_000_000 })
+test('reload_plugins: rewrites hooks/reload-stamp.ts (the watcher reloads the module); no config.set, no /reload-plugins', async ($, on) => {
   const seen: unknown[] = []
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('tool.register', (_$, e) => ({ value: { tool: e.name } }))
   on('command.run', (_$, e: any) => { seen.push(['command', e.command]); return { text: '' } as never })
-  on('config.set', (_$, e: any) => { seen.push([e.key, e.value]); return { value: e.value } as never })
-  on('ui.toast', (_$, e: any) => { seen.push(e.text); return { value: undefined } as never })
-  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('config.set', (_$, e: any) => { seen.push(['config', e.key]); return { value: e.value } as never })
+  on('process.run', (_$, e: any) => { seen.push(e.argv); return { value: { exitCode: 0, stdout: '', stderr: '' } } as never })
   await $.session.start({ surface: null, isInteractive: false, cwd: 'C:/x' })
-  await $.tool.call({ tool: 'mcp__stool__reload_plugins' })
-  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never)
-  await clock.advance(2000)
-  expect(seen[0]).toEqual(['stool.reloadNonce', 5001])
-  expect(String(seen[1])).toContain('stool reloaded')
+  const r = await $.tool.call({ tool: 'mcp__stool__reload_plugins' })
+  expect(r.result).toContain('Reload queued')
+  expect(seen.length).toBe(1)
+  const argv = seen[0] as string[]
+  expect(argv[0]).toBe('node')
+  expect(argv[2]).toContain('RELOAD_STAMP')
+  expect(argv[3]).toMatch(/hooks[\/]reload-stamp\.ts$/)
 })
 
 test('review tiers: parsed from the option lines, due on multiples of their interval, 0 = off', () => {
