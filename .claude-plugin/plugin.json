@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.16.0",
+  "version": "2.17.0",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -170,6 +170,18 @@
         "why-behind every 5",
         "deep every 10"
       ]
+    },
+    "restartMode": {
+      "type": "string",
+      "title": "Restart mode",
+      "description": "How restart_session resets the context: 'clear' (/clear, then the resume prompt as the next user message) or 'compact' (/compact, the resume prompt and the handoff's RESUME HERE block injected as context, a background-task wake starts the next turn; the process, background tasks and other plugins' state survive). Set Claude Code's /autocompact threshold above restartContextTokens so this restart fires first",
+      "default": "clear"
+    },
+    "resumeFile": {
+      "type": "string",
+      "title": "Restart: handoff file for compact mode",
+      "description": "Handoff file whose RESUME HERE block (restartHandoffHeading) a compact restart injects, relative to the session folder or absolute",
+      "default": "docs/HANDOFF.md"
     },
     "trial": {
       "type": "boolean",

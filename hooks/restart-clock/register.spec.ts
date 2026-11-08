@@ -204,3 +204,25 @@ test('owner config: a context that shrinks without a low reading in between (cle
   await turn()
   expect((await notes())[0]).toContain('280k tokens')
 })
+
+test('owner config: a compaction (a compact-mode restart) re-arms the clock as a /clear does', OWNER, async ($, on) => {
+  let tokens = 280_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  on('classic.SessionStart', () => ({}) as never)
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const notes = async () => (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+  const turn = () => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  await turn()
+  expect((await notes()).length).toBe(1)
+  await $.classic.SessionStart({ source: 'compact' } as never)
+  tokens = 75_000 // what a compaction leaves
+  await turn()
+  expect((await notes()).length).toBe(0)
+  tokens = 290_000
+  await turn()
+  expect((await notes())[0]).toContain('290k tokens')
+})
