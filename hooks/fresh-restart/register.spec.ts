@@ -4,8 +4,9 @@ import { TIERS_DEFAULT, dueTiers, parseTiers, tierLine } from '../config'
 import { RESUME_CAP, resumeSection, withReviews } from './register'
 
 tier('user')
+const CLEAR = { options: { restartMode: 'clear' } }
 
-test('restart_session: clear, then /model, then the prompt; no model means no /model; a bad name is refused', async ($, on) => {
+test('restart_session: clear, then /model, then the prompt; no model means no /model; a bad name is refused', CLEAR, async ($, on) => {
   const clock = mock.clock(on, { now: 0 })
   const seen: string[] = []
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
@@ -63,7 +64,7 @@ test('review tiers: parsed from the option lines, due on multiples of their inte
   expect(ten.endsWith('Then: go')).toBe(true)
 })
 
-test('restart_session reads docs/restart_count.txt and puts the due review in front of the resume prompt', async ($, on) => {
+test('restart_session reads docs/restart_count.txt and puts the due review in front of the resume prompt', CLEAR, async ($, on) => {
   const clock = mock.clock(on, { now: 0 })
   let count = '5\n'
   const reads: string[] = []
@@ -88,7 +89,7 @@ test('restart_session reads docs/restart_count.txt and puts the due review in fr
   expect(reads[0]!.split(String.fromCharCode(92)).join('/')).toBe('C:/x/docs/restart_count.txt')
 })
 
-test('restart_session: a wake turn that starts after the clear cannot lose the resume prompt; a refused submit is retried', async ($, on) => {
+test('restart_session: a wake turn that starts after the clear cannot lose the resume prompt; a refused submit is retried', CLEAR, async ($, on) => {
   const clock = mock.clock(on, { now: 0 })
   const seen: string[] = []
   const files = new Map<string, string>()

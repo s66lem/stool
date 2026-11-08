@@ -175,7 +175,7 @@
       "type": "string",
       "title": "Restart mode",
       "description": "How restart_session resets the context: 'clear' (/clear, then the resume prompt as the next user message) or 'compact' (/compact, the resume prompt and the handoff's RESUME HERE block injected as context, a background-task wake starts the next turn; the process, background tasks and other plugins' state survive). Set Claude Code's /autocompact threshold above restartContextTokens so this restart fires first",
-      "default": "clear"
+      "default": "compact"
     },
     "resumeFile": {
       "type": "string",

@@ -18,13 +18,13 @@ let trying = false
 let busy = false // a (non-agent) turn is running
 // restartMode "compact": /compact <focus> instead of /clear; the resume text goes in as context at the compaction's
 // SessionStart (source compact), and a background-task notification starts the next turn (no user message)
-let mode: 'clear' | 'compact' = 'clear'
+let mode: 'clear' | 'compact' = 'compact'
 let focus = ''
 let restartN = 0
 let compacting = false // a compact restart is between its /compact and its finish: SessionStart(compact) injects once
 let injected = false
 let waking: { body: string } | undefined // the wake task is out; cleared by the next main-loop turn.start
-let cfg = { mode: 'clear' as 'clear' | 'compact', resumeFile: 'docs/HANDOFF.md', heading: 'RESUME HERE' }
+let cfg = { mode: 'compact' as 'clear' | 'compact', resumeFile: 'docs/HANDOFF.md', heading: 'RESUME HERE' }
 const CONFIRM_MS = 60_000 // a task wake must start a turn this soon, else a framed prompt goes instead
 const WAKE_DESC = 'stool restart wake: read this output'
 export const WAKE_FILE = '~/.claude/stool/restart-wake.txt'
@@ -97,7 +97,7 @@ const WRITE_STAMP = "require('fs').writeFileSync(process.argv[1], 'export const 
 export const RESTART_TOOL: ToolSpec = {
   name: 'restart_session',
   description:
-    'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message (option restartMode "clear", the default); with restartMode "compact" it runs /compact, injects `prompt` and the handoff RESUME HERE block as context, and starts the next turn with a background-task notification. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this. `model` is optional; switches this session to that model before the resume prompt.',
+    'Fresh context in this same session: once the current turn ends, runs /clear and submits `prompt` as the next user message (option restartMode "clear"); with restartMode "compact" (the default) it runs /compact, injects `prompt` and the handoff RESUME HERE block as context, and starts the next turn with a background-task notification. Permission mode, Remote Control and the session itself stay. Commit and write the handoff first; end the turn right after calling this. `model` is optional; switches this session to that model before the resume prompt.',
   inputSchema: {
     type: 'object',
     required: ['prompt'],
@@ -141,7 +141,7 @@ export const COUNT_FILE = 'docs/restart_count.txt'
 export const register: Register = (on, options) => {
   const tiers = parseTiers(options?.reviewTiers)
   cfg = {
-    mode: opt(options, 'restartMode', 'clear').trim().toLowerCase() === 'compact' ? 'compact' : 'clear',
+    mode: opt(options, 'restartMode', 'compact').trim().toLowerCase() === 'clear' ? 'clear' : 'compact',
     resumeFile: opt(options, 'resumeFile').trim() || 'docs/HANDOFF.md',
     heading: opt(options, 'restartHandoffHeading').trim() || 'RESUME HERE',
   }
