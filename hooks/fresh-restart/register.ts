@@ -1,7 +1,9 @@
-import type { Register, ToolSpec } from 'claude-code'
+import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
 import { type Tier, dueTiers, parseTiers } from '../config'
 import { RELOAD_STAMP } from '../reload-stamp'
+
+type $T = EngineInterface
 
 const TOOL = 'mcp__stool__restart_session'
 
@@ -9,6 +11,30 @@ const TOOL = 'mcp__stool__restart_session'
 let pending: string | undefined
 // optional model for /model, run after the clear and before the prompt
 let model: string | undefined
+let cleared = false // /clear (and /model) already ran for this restart; a retry only submits
+let tries = 0 // submits made
+let clearFails = 0
+let trying = false
+let busy = false // a (non-agent) turn is running
+const MAX_TRIES = 5
+const RETRY_MS = 4000
+// Other plugins read this to hold their own wake-ups until the resume prompt is in (tripwire does; no import needed).
+// { pending: true, at: ms } from the restart_session call until the prompt is submitted (or given up); then { pending: false }.
+export const PENDING_FILE = '~/.claude/stool/restart-pending.json'
+async function mark($: $T, pendingNow: boolean) {
+  const home = ((await $.env.get('USERPROFILE').catch(() => undefined)) ?? (await $.env.get('HOME').catch(() => undefined))) as string | undefined
+  const file = PENDING_FILE.startsWith('~') && home ? home.split(String.fromCharCode(92)).join('/') + PENDING_FILE.slice(1) : PENDING_FILE
+  const at = await $.clock.now().catch(() => Date.now())
+  await $.fs.write(file, JSON.stringify({ pending: pendingNow, at })).catch(() => undefined)
+}
+async function finish($: $T) {
+  pending = undefined
+  model = undefined
+  cleared = false
+  tries = 0
+  clearFails = 0
+  await mark($, false).catch(() => undefined)
+}
 // reload_plugins rewrites hooks/reload-stamp.ts: the plugin watcher (CLAUDE_CODE_PLUGIN_DIR_WATCH) reloads the module
 // when a source file changes, before the next stool tool or at turn end. Works over Remote Control, where
 // /reload-plugins is refused. ($.config.set cannot do it: the engine lists no row for the plugin's options, so
@@ -83,6 +109,10 @@ export const register: Register = (on, options) => {
     const n = parseInt(await Promise.resolve().then(() => $.fs.read(`${cwd}/${COUNT_FILE}`)).catch(() => ''), 10)
     const r = withReviews(prompt, tiers, Number.isFinite(n) ? n : 0)
     pending = r.text
+    cleared = false
+    tries = 0
+    clearFails = 0
+    await mark($, true).catch(() => undefined)
     const m = (e as unknown as { model?: unknown }).model
     model = undefined
     let note = ''
@@ -96,24 +126,51 @@ export const register: Register = (on, options) => {
     return { result: `Restart queued: /clear and the resume prompt run when this turn ends.${review}${note} End the turn now.` }
   })
 
+  on('turn.start', { turnId: /[^]*|a{45}/ }, async (_$, e, next) => {
+    if (e.agentId === undefined) busy = true
+    return next(e)
+  })
+
   on('turn.complete', { reason: /[^]*|a{7}/ }, async ($, e, next) => {
     const done = await next(e)
+    if (e.agentId !== undefined) return done
+    busy = false
     if (pending === undefined) return done
-    const text = pending
-    pending = undefined
-    const m = model
-    model = undefined
     // outside the turn's hooks: command.run and prompt.submit refuse to run inside a hook the turn waits on
-    $.clock.after(1000, () => {
-      void $.command
-        .run({ command: 'clear' })
-        .then(async () => {
-          // an unknown model must not block the restart; /model answers with text or throws
-          if (m) await $.command.run({ command: 'model', args: m }).catch(err => $.ui.toast(`model not changed: ${String(err)}`))
-        })
-        .then(() => $.prompt.submit({ text, asUser: true }))
-        .catch(err => $.ui.toast(`fresh-restart failed: ${String(err)}`))
-    })
+    $.clock.after(1000, () => void attempt($))
     return done
   })
+}
+
+// One try at the restart: /clear and /model once, then the prompt. The prompt stays pending until a submit takes it, so a
+// turn that started after the clear (a tripwire wake, 2026-11-08 restart #119) cannot lose it: the failed or refused
+// submit is retried when that turn completes, or on a timer, MAX_TRIES times in all.
+async function attempt($: $T) {
+  const text = pending
+  if (text === undefined || trying) return
+  if (busy) return // a turn runs: its turn.complete tries again
+  trying = true
+  try {
+    if (!cleared) {
+      await $.command.run({ command: 'clear' })
+      cleared = true
+      // an unknown model must not block the restart; /model answers with text or throws
+      if (model) await $.command.run({ command: 'model', args: model }).catch(err => $.ui.toast(`model not changed: ${String(err)}`))
+    }
+    if (busy) return // a wake turn began after the clear: its turn.complete submits
+    tries++
+    const r = (await $.prompt.submit({ text, asUser: true })) as { drop?: unknown } | undefined
+    if (r && typeof r.drop === 'string') throw new Error(`dropped: ${r.drop}`)
+    await finish($)
+  } catch (err) {
+    if (tries >= MAX_TRIES || (!cleared && ++clearFails >= MAX_TRIES)) {
+      $.ui.toast(`fresh-restart failed, the resume prompt was NOT delivered: ${String(err)}`)
+      await finish($)
+    } else {
+      $.ui.toast(`fresh-restart: ${String(err).slice(0, 120)}; trying again`)
+      $.clock.after(RETRY_MS, () => void attempt($))
+    }
+  } finally {
+    trying = false
+  }
 }

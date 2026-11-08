@@ -87,3 +87,45 @@ test('restart_session reads docs/restart_count.txt and puts the due review in fr
   }
   expect(reads[0]!.split(String.fromCharCode(92)).join('/')).toBe('C:/x/docs/restart_count.txt')
 })
+
+test('restart_session: a wake turn that starts after the clear cannot lose the resume prompt; a refused submit is retried', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  const seen: string[] = []
+  const files = new Map<string, string>()
+  let refuse = 0
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('tool.register', (_$, e) => ({ value: { tool: e.name } }))
+  on('command.run', (_$, e) => { seen.push(e.command); return { text: '' } })
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('turn.start', (_$, e) => ({ ...e }) as never)
+  on('ui.toast', () => ({ value: undefined }) as never)
+  on('fs.write', (_$, e: any) => { files.set(e.path, e.text); return { value: undefined } })
+  on('prompt.submit', (_$, e) => {
+    if (refuse > 0) { refuse--; throw new Error('a turn is running') }
+    seen.push(`prompt ${e.text}`)
+    return { text: e.text }
+  })
+  await $.session.start({ surface: null, isInteractive: false, cwd: 'C:/x' })
+  const done = { answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as never
+  const marker = () => JSON.parse([...files.entries()].find(([k]) => k.endsWith('restart-pending.json'))![1]).pending
+  await $.tool.call({ tool: 'mcp__stool__restart_session', prompt: 'go' } as never)
+  expect(marker()).toBe(true) // tripwire reads this to hold its wakes
+  // a wake turn starts before the restart's own try runs: the prompt waits for that turn's end
+  await $.turn.complete(done)
+  await $.turn.start({ text: 'wake', turnId: 'w1' } as never)
+  await clock.advance(10_000)
+  expect(seen.filter(x => x.startsWith('prompt'))).toEqual([])
+  expect(marker()).toBe(true)
+  await $.turn.complete(done)
+  await clock.advance(2000)
+  expect(seen).toEqual(['clear', 'prompt go']) // one clear, the prompt after the wake turn
+  expect(marker()).toBe(false)
+  // a refused submit is retried on a timer, and the clear is not run twice
+  seen.length = 0
+  refuse = 2
+  await $.tool.call({ tool: 'mcp__stool__restart_session', prompt: 'again' } as never)
+  await $.turn.complete(done)
+  await clock.advance(30_000)
+  expect(seen).toEqual(['clear', 'prompt again'])
+  expect(marker()).toBe(false)
+})
