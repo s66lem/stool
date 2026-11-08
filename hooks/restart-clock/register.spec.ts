@@ -226,3 +226,18 @@ test('owner config: a compaction (a compact-mode restart) re-arms the clock as a
   await turn()
   expect((await notes())[0]).toContain('290k tokens')
 })
+
+test('restartMode off: no "restart due" note at any context, and no phase-end line', { options: { ...OWNER.options, restartMode: 'off', restartAtPhaseEnd: true } }, async ($, on) => {
+  const tokens = 900_000
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, percent: tokens / 10_000, tokens }, rateLimits: [] } }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('state.set', () => ({ value: undefined }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  for (let i = 0; i < 3; i++) {
+    await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+    const notes = (((await $.tool.call({ tool: 'Bash', command: 'ls' })).context ?? []) as string[]).filter(c => c.includes('restart due'))
+    expect(notes).toEqual([])
+  }
+})

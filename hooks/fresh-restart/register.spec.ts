@@ -241,3 +241,20 @@ test('restartMode compact fallbacks: no SessionStart(compact) puts the context i
   expect(w.submits[0].text).toContain('could not start')
   expect(w.submits[0].text).toContain('again')
 })
+
+test('restartMode off: restart_session refuses, and nothing runs at the turn end (no /clear, no /compact, no prompt)', { options: { restartMode: 'off' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  const seen: string[] = []
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('tool.register', (_$, e) => ({ value: { tool: e.name } }))
+  on('command.run', (_$, e) => { seen.push(e.command); return { text: '' } })
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  on('tool.call', { tool: 'Bash' }, () => { seen.push('bash'); return { result: 'ok' } as never })
+  on('prompt.submit', (_$, e) => { seen.push(`prompt ${e.text}`); return { text: e.text } })
+  await $.session.start({ surface: null, isInteractive: false, cwd: 'C:/x' })
+  const r = await $.tool.call({ tool: 'mcp__stool__restart_session', prompt: 'go' } as never)
+  expect(JSON.stringify(r)).toContain('restarts are off')
+  await $.turn.complete(DONE)
+  await clock.advance(70_000)
+  expect(seen).toEqual([])
+})

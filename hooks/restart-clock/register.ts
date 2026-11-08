@@ -36,8 +36,8 @@ export function lintHandoff(body: string, now: number, heading = 'RESUME HERE'):
 }
 
 // `ctxAt` and `limit` (the publish count that makes a restart due; Infinity = counter off) come from the options
-type S = { scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; warnTok: number; base: number; governor: boolean; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
-const due = (s: S) => (s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit
+type S = { off: boolean; scoped: boolean; calls: number; ctx: number | null; tokens: number | null; tokAt: number; nagAt: number; warnTok: number; base: number; governor: boolean; publishes: number; warned: boolean; note: boolean; ctxAt: number; limit: number }
+const due = (s: S) => !s.off && ((s.ctx ?? 0) >= s.ctxAt || (s.tokAt > 0 && (s.tokens ?? 0) >= s.tokAt) || s.publishes >= s.limit)
 
 function publish($: EngineInterface, s: S) {
   const strip: RestartStrip = { ctx: s.ctx, publishes: s.publishes, due: due(s) }
@@ -74,7 +74,8 @@ async function readCtx($: EngineInterface, s: S) {
 export const register: Register = (on, options) => {
   const counter = flag(options, 'restartPublishCounter') && text(options, 'restartPublishPattern') !== ''
   const ctxAt = num(options, 'restartContextAt', CTX_AT)
-  const s: S = { scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, warnTok: 0, base: num(options, 'restartContextTokens', CTX_TOKENS), governor: options?.governor !== false, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
+  // restartMode off: restarts are off, so the clock never says one is due (and phase-end restarts are not asked for)
+  const s: S = { off: text(options, 'restartMode').trim().toLowerCase() === 'off', scoped: false, calls: 0, ctx: null, tokens: null, tokAt: num(options, 'restartContextTokens', CTX_TOKENS), nagAt: 0, warnTok: 0, base: num(options, 'restartContextTokens', CTX_TOKENS), governor: options?.governor !== false, publishes: 0, warned: false, note: false, ctxAt, limit: counter ? num(options, 'restartPublishesAt', PUBLISHES_AT) : Infinity }
   const publishRe = pattern(text(options, 'restartPublishPattern'))
   const lint = flag(options, 'restartHandoffLint')
   const file = esc(text(options, 'restartHandoffFile', 'HANDOFF.md'))
@@ -98,7 +99,7 @@ export const register: Register = (on, options) => {
   const phaseEnd = flag(options, 'restartAtPhaseEnd')
   on('prompt.compose', { promptModel: /[^]*|a{15}/ }, async ($, e, next) => {
     const r = await next(e)
-    if (!phaseEnd || !s.scoped) return r
+    if (!phaseEnd || s.off || !s.scoped) return r
     return { sections: [...r.sections, { id: 'restart-clock:phase-end', text: 'Phase-end restarts are on (stool option restartAtPhaseEnd): run the stool:session-restart skill at the end of each phase, as well as when the restart clock says a restart is due.', scope: 'session' as const }] }
   })
 

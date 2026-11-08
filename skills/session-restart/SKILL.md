@@ -5,6 +5,8 @@ description: Use when the restart clock says a restart is due (the context thres
 
 # Session restart
 
+**Restarts off:** when the `restartMode` option is `off` (`restart_session` answers "restarts are off"), stop here: do none of the steps below and keep working in this session; tell the user in one line if they asked for the restart.
+
 Run this when the restart clock says a restart is due (context at `restartContextAt` percent or `restartContextTokens` tokens), when the user asks to restart, or when the session has clearly grown long. Phase ends trigger it only when the `restartAtPhaseEnd` option is on (the system prompt then says so); otherwise keep working through phase ends, since each restart costs a fresh setup. Do every step; don't skip the retrospective.
 
 ## 1. Retrospective
@@ -28,7 +30,7 @@ Both include the lessons pass, consolidated (merge duplicate lessons, fold durab
 A long session's handoff misses things the lead no longer has in view. When the context sits at 65% or more (or the user asks), before the restart dispatch one read-only agent (a strong model) with the path of the handoff and the session transcript (the newest `.jsonl` under `~/.claude/projects/<project slug>/`). Ask for four lists: **A** facts in the transcript missing from the handoff; **B** contradictions and stale lines in the handoff; **C** the twelve facts that must not be lost; **D** user instructions never acted on. Fold the findings into the handoff (rewrite the block, don't append), commit, then go on. No `/compact` of your own is needed: the restart's clear or compaction replaces it.
 
 ## 3. Fresh session
-The restart reuses this session, so it stays a normal interactive session with its permission mode and Remote Control. `mcp__stool__restart_session` uses whichever `restartMode` option is set (its result says which); steps 1, 2 and 2a are the same in both modes:
+The restart reuses this session, so it stays a normal interactive session with its permission mode and Remote Control. `mcp__stool__restart_session` uses whichever `restartMode` option is set (its result says which); steps 1, 2 and 2a are the same in both modes (with `off` there is no restart; see the top):
 - `clear`: when the turn ends it runs `/clear` and submits the prompt as the next user message.
 - `compact` (default): when the turn ends it runs `/compact` with a short focus (keep the task state and open items), then injects the prompt, the restart number and the `RESUME HERE` block of `resumeFile` (default `docs/HANDOFF.md`, read from disk then) as context after the summary, and starts the next turn with a background-task notification ("stool restart wake"), not a user message. The process survives, so background tasks and other plugins keep running. The handoff must be committed before the call, since the injected block is read at the compaction. Claude Code's own auto-compact threshold must sit above `restartContextTokens` (`/autocompact <tokens>`), or it compacts first without the resume context.
 - Call `mcp__stool__restart_session` with a self-contained `prompt`:

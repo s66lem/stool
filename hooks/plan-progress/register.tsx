@@ -1554,7 +1554,7 @@ async function setChoice($: EngineInterface, key: typeof AUTOCLOSE | typeof SPEE
 // written to the settings as /config writes it; the mod then reloads with the new options and the window stays open.
 // A press while a set is on its way is dropped
 let isSettingOption = false
-async function setOption($: EngineInterface, field: string, value: boolean | number | string[]) {
+async function setOption($: EngineInterface, field: string, value: boolean | number | string | string[]) {
   if (isSettingOption) return
   isSettingOption = true
   try {
@@ -1596,6 +1596,15 @@ export const register: Register = (on, options) => {
   // usageStrip off: the strip above the bars is not drawn (the /ribbon command still answers)
   const isStripOn = options?.usageStrip !== false
   const tiers = parseTiers(options?.reviewTiers)
+  // the Restarts card: each restart option as set now (the parts read the same fields with the same defaults)
+  const optNum = (k: string, d: number) => (typeof options?.[k] === 'number' && Number.isFinite(options[k]) ? (options[k] as number) : d)
+  const optText = (k: string, d: string) => (typeof options?.[k] === 'string' && (options[k] as string).trim() ? (options[k] as string).trim() : d)
+  const restartMode = ((m: string) => (m === 'clear' || m === 'off' ? m : 'compact'))(optText('restartMode', 'compact').toLowerCase())
+  const ctxTokens = optNum('restartContextTokens', 150_000)
+  const ctxAt = optNum('restartContextAt', 65)
+  const publishesAt = optNum('restartPublishesAt', 3)
+  const resumeFile = optText('resumeFile', 'docs/HANDOFF.md')
+  const isGovernorOn = options?.governor !== false
   // per-turn bookkeeping; module variables are fine here, a reload just starts a fresh count
   let workCalls = 0
   let sinceUpdate = 0
@@ -1950,6 +1959,15 @@ export const register: Register = (on, options) => {
       ) : (
         <Button key={key} plain dimColor label="○ Off" onPress={press} />
       )
+    // a row of cells, one filled: the value set now (an unlisted one gets its own cell); a press writes that value
+    const pick = (key: string, field: string, cells: [string | number, string][], now: string | number) => (
+      <Box key={key} flexDirection="row" flexShrink={0}>
+        {cells.map(([v, label]) => (
+          <Button key={`${key}-${v}`} dimColor={v !== now} {...(v === now ? { variant: 'primary' as const } : { plain: true })} label={label} onPress={() => setOption($, field, v)} />
+        ))}
+      </Box>
+    )
+    const nums = (list: number[], now: number) => [...new Set([...list, now])].sort((a, b) => a - b)
     const row = (key: string, title: string, about: string, control: unknown) => (
       <Box key={`row-${key}`} flexDirection="row" alignItems="center" gap={1} marginTop={1}>
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
@@ -2032,7 +2050,22 @@ export const register: Register = (on, options) => {
         {card('Usage ledger', 'for the usage_since tool; off until switched on', ...part('Usage'))}
         {card(
           'Restarts',
-          'reviews put in front of the resume prompt, every Nth restart; the rest off until switched on',
+          'how and when the session restarts, and reviews every Nth restart; patterns and file names are in /config',
+          row(
+            'restartMode',
+            'Restart mode',
+            restartMode === 'off'
+              ? 'Off: restart_session refuses and the restart clock stays quiet.'
+              : restartMode === 'clear'
+                ? 'Clear: /clear, then the resume prompt as your next message.'
+                : 'Compact: /compact, the resume prompt and RESUME HERE as context, a background wake. Background tasks survive.',
+            pick('restartMode', 'restartMode', [['compact', 'Compact'], ['clear', 'Clear'], ['off', 'Off']], restartMode),
+          ),
+          row('restartContextTokens', 'Restart due at context tokens', "Every message re-reads the whole context. Keep Claude Code's /autocompact above it, so stool's restart comes first.", pick('ctxTokens', 'restartContextTokens', nums([0, 100_000, 150_000, 200_000, 275_000], ctxTokens).map(n => [n, n === 0 ? 'Off' : `${Math.round(n / 1000)}k`]), ctxTokens)),
+          row('restartContextAt', 'Restart due at context %', 'Of the context window; on a 1M window the token threshold comes first.', pick('ctxAt', 'restartContextAt', nums([50, 65, 80], ctxAt).map(n => [n, `${n}%`]), ctxAt)),
+          row('governor', 'Governor', 'Lowers the token threshold while the 5-hour or weekly window runs hot.', sw('governor', isGovernorOn, () => setOption($, 'governor', !isGovernorOn))),
+          row('resumeFile', 'Handoff for compact restarts', 'Its RESUME HERE block goes in after the summary; relative to the session folder.', pick('resumeFile', 'resumeFile', [...new Set(['docs/HANDOFF.md', 'dev/HANDOFF.md', 'HANDOFF.md', resumeFile])].map(f => [f, f]), resumeFile)),
+          row('restartPublishesAt', 'Publishes before a restart', 'Used by the publish counter below.', pick('publishesAt', 'restartPublishesAt', nums([2, 3, 5], publishesAt).map(n => [n, `${n}`]), publishesAt)),
           ...tiers.map((t, i) =>
             row(
               `tier-${i}`,

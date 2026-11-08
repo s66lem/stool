@@ -444,6 +444,36 @@ const C = {
     const ok = JSON.stringify(shown) === JSON.stringify(['○ Off', '○ Off', '● On', 'primary', true]) && F.opened[0]?.id === 'settings' && got === JSON.stringify([{ key: 'stool.reviewTiers', value: ['goal: why-behind every 0'] }, { key: 'stool.restartAtPhaseEnd', value: false }, { key: 'stool.planProgress', value: true }])
     return [`${JSON.stringify(shown)} ${got}`, ok]
   },
+  async settings_restart_controls(E) {
+    const find = (n, key) => (Array.isArray(n) ? n.map(c => find(c, key)).find(Boolean) : n && typeof n === 'object' ? (n.props?.key === key ? n : (n.children ?? []).map(c => find(c, key)).find(Boolean)) : undefined)
+    const F = await boot(file, new Map(), new Map(), { restartMode: 'off', restartContextTokens: 275_000, resumeFile: 'dev/HANDOFF.md', governor: false })
+    await F.command('plan-progress-settings')
+    const tree = await F.render('Pane', { requestId: 'settings' })
+    const v = k => find(tree, k)?.props.variant ?? find(tree, k)?.props.label
+    const shown = [v('restartMode-off'), v('restartMode-compact'), v('ctxTokens-275000'), v('ctxAt-65'), v('resumeFile-dev/HANDOFF.md'), v('publishesAt-3'), find(tree, 'governor')?.props.label]
+    for (const k of ['restartMode-compact', 'restartMode-clear', 'ctxTokens-0', 'ctxAt-80', 'resumeFile-docs/HANDOFF.md', 'publishesAt-5', 'governor']) await find(tree, k).props.onPress()
+    // the defaults draw as set: compact, 150k, docs/HANDOFF.md, governor on
+    const D = await boot(file, new Map(), new Map(), {})
+    await D.command('plan-progress-settings')
+    const dt = await D.render('Pane', { requestId: 'settings' })
+    const dv = k => find(dt, k)?.props.variant ?? find(dt, k)?.props.label
+    const defaults = [dv('restartMode-compact'), dv('ctxTokens-150000'), dv('resumeFile-docs/HANDOFF.md'), find(dt, 'governor')?.props.label]
+    const got = JSON.stringify(F.configSet)
+    const want = JSON.stringify([
+      { key: 'stool.restartMode', value: 'compact' },
+      { key: 'stool.restartMode', value: 'clear' },
+      { key: 'stool.restartContextTokens', value: 0 },
+      { key: 'stool.restartContextAt', value: 80 },
+      { key: 'stool.resumeFile', value: 'docs/HANDOFF.md' },
+      { key: 'stool.restartPublishesAt', value: 5 },
+      { key: 'stool.governor', value: true },
+    ])
+    const ok =
+      JSON.stringify(shown) === JSON.stringify(['primary', 'Compact', 'primary', 'primary', 'primary', 'primary', '○ Off']) &&
+      JSON.stringify(defaults) === JSON.stringify(['primary', 'primary', 'primary', '● On']) &&
+      got === want
+    return [`${JSON.stringify(shown)} ${JSON.stringify(defaults)} ${got}`, ok]
+  },
   async stop_still_blocks_open_bar(E) {
     await E.turnStart()
     await create(E)
