@@ -196,7 +196,7 @@ test('restartMode compact: /compact <focus>, then the resume prompt and RESUME H
   await $.turn.complete(DONE)
   await clock.advance(2000)
   expect(w.seen.length).toBe(1)
-  expect(w.seen[0]).toMatch(/^compact stool restart #7: keep the current task state.*Next: In C:\/x: go on$/)
+  expect(w.seen[0]).toMatch(/^compact stool restart #7: keep the current task state.*do not copy them\.$/)
   expect(w.ctx.length).toBe(1)
   for (const has of ['restart #7, compact mode', 'In C:/x: go on', 'next: ship it', '### detail']) expect(w.ctx[0]).toContain(has)
   expect(w.ctx[0]).not.toContain('old stuff')

@@ -64,8 +64,8 @@ export function resumeSection(body: string, heading = 'RESUME HERE', cap = RESUM
 }
 
 // one line for /compact: what the summary keeps; the resume text itself is injected after it
-export const compactFocus = (prompt: string, n: number) =>
-  `stool restart #${n}: keep the current task state, open items, decisions and anything unverified; the resume prompt and the handoff's RESUME HERE block are injected after this summary, so do not copy them. Next: ${prompt.replace(/\s+/g, ' ').trim().slice(0, 300)}`
+export const compactFocus = (_prompt: string, n: number) =>
+  `stool restart #${n}: keep the current task state, open items, decisions and anything unverified; the resume prompt and the handoff's RESUME HERE block are injected after this summary, so do not copy them.`
 
 // what SessionStart(compact) injects: the agent's resume prompt and the handoff's block, read fresh from disk
 async function resumeContext($: $T, prompt: string) {
