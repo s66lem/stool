@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.18.1-4FC27A.svg)
+![Version](https://img.shields.io/badge/version-2.19.0-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -51,7 +51,7 @@ claude plugin marketplace add s66lem/stool
 claude plugin install stool@stool
 ```
 
-This installs the version on `main` (2.18.1, the one in the badge above); `claude plugin list` shows what you have. To move an older install up to it:
+This installs the version on `main` (2.19.0, the one in the badge above); `claude plugin list` shows what you have. To move an older install up to it:
 
 ```
 claude plugin marketplace update stool
@@ -67,6 +67,7 @@ A running session keeps the version it started with, so restart Claude Code afte
 | Progress bars (`plan-progress`) | yes | The `plan_progress` tool: the model keeps a staged plan above the prompt, with per-agent strips, a stage pill, times on hover, sounds, and a settings window (the gear in the footer). The terminal bar is a braille track. |
 | Usage strip | yes | A strip above the bars: running agents / agent cap (`1+2/4` is one cheap Haiku agent plus two counted Sonnet/Opus against a cap of four), weekly and 5-hour usage with the pace, keep-warm state, context percent, tokens per second. |
 | Usage pace (`usage-pace`) | yes | Computes the agent cap from the 5-hour and weekly windows, and toasts when the 5-hour limit would be hit early. Tool `agent_cap`. |
+| Weekly burn (`burn-pace`) | with `usageLog` | `/burn` (or Show on the settings window's Weekly burn row) draws this week's weekly % against an even pace, the week-average and last 1/6/24 h pace projections, when it runs out, and an hourly pts/hr strip against the rate that lasts to the reset; hover an hour for its numbers. |
 | Keep-warm (`keep-warm`) | yes | Pings a big idle session every 50 minutes so its one-hour prompt cache stays warm, up to 15 pings in a row, only above 100k tokens of context and below 95% of any limit. Command `/keepwarm off\|on\|<count>`. |
 | Restart tools (`fresh-restart`) | yes | `restart_session` (`/clear` plus a resume prompt in the same session, once the turn ends, or `/compact` plus injected resume context with `restartMode` compact; a review tier due at this restart goes in front of the prompt, see `reviewTiers`) and `reload_plugins`. |
 | Restart clock (`restart-clock`) | context part: yes | Says (a note on a tool result, red on the strip) when the main conversation reaches `restartContextTokens` (or the legacy `restartContextAt` percent, whichever comes first). Opt-in extras: a publish counter and a handoff-file lint. |
