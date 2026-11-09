@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-9869F4.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.275-D97757.svg)](https://claude.com/claude-code)
-![Version](https://img.shields.io/badge/version-2.18.0-4FC27A.svg)
+![Version](https://img.shields.io/badge/version-2.18.1-4FC27A.svg)
 ![Desktop + CLI](https://img.shields.io/badge/runs%20in-desktop%20%2B%20terminal-5B9BF7.svg)
 
 **Live progress bars, a usage strip and an agent cap above your Claude Code prompt,<br>so long multi-agent sessions stay visible and stay inside your limits.**
@@ -53,7 +53,7 @@ Answer `y` to add the marketplace, pick a scope, then set the options (every one
 | Usage pace (`usage-pace`) | yes | Computes the agent cap from the 5-hour and weekly windows, and toasts when the 5-hour limit would be hit early. Tool `agent_cap`. |
 | Keep-warm (`keep-warm`) | yes | Pings a big idle session every 50 minutes so its one-hour prompt cache stays warm, up to 15 pings in a row, only above 100k tokens of context and below 95% of any limit. Command `/keepwarm off\|on\|<count>`. |
 | Restart tools (`fresh-restart`) | yes | `restart_session` (`/clear` plus a resume prompt in the same session, once the turn ends, or `/compact` plus injected resume context with `restartMode` compact; a review tier due at this restart goes in front of the prompt, see `reviewTiers`) and `reload_plugins`. |
-| Restart clock (`restart-clock`) | context part: yes | Says (a note on a tool result, red on the strip) when the main conversation reaches `restartContextAt` percent of context. Opt-in extras: a publish counter and a handoff-file lint. |
+| Restart clock (`restart-clock`) | context part: yes | Says (a note on a tool result, red on the strip) when the main conversation reaches `restartContextTokens` (or the legacy `restartContextAt` percent, whichever comes first). Opt-in extras: a publish counter and a handoff-file lint. |
 | Agent meter (`agent-meter`) | yes | Counts each subagent's tool calls against the cap its prompt states ("about 40 tool calls"), toasts once over it, and appends one line per finished agent to a ledger file (with its four token counts, id and session). Tools `usage_since` and `outcomes` (weekly % and commits per project, and the cost of one commit). |
 | Dispatch guard (`dispatch-guard`) | no | Appends standing orders to every Agent prompt, can require a tool-call cap on prompts matching a pattern, and holds expensive agents to the agent cap across all your sessions (through a shared slot file; Haiku and `dispatchCheapAgents` types are not counted, and an agent resumed with SendMessage takes its slot again). |
 | Permission command (`permission`) | no | `/stoolpermission <mode> [--persist]`: set the session's permission mode where the client's picker lacks one (bypass over Remote Control on a phone). `bypassPermissions` is done by turning `ask` into `allow` (deny rules and guards still apply); `default`, `acceptEdits`, `auto` and `dontAsk` are the real modes, set at the next permission prompt. `--persist` holds the project folder and below to the mode, for every session there, until `/stoolpermission off --persist`. |
@@ -83,10 +83,10 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `ledgerCacheWriteMult` | 1.4 | What a cache-write token costs against an input token when `usage_since` prices the ledger (1.25 for 5-minute writes, 2 for 1-hour writes; a turn's counts do not say which). |
 | `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
 | `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
-| `restartContextAt` | 65 | Context percent at which a restart is due. |
-| `restartContextTokens` | 150000 | Context tokens at which a restart is due too (0 = off); re-said every 50k after. |
+| `restartContextAt` | 65 | Legacy context-percent threshold, kept for back-compat; the clock uses whichever threshold comes first. Set `restartContextTokens` instead. |
+| `restartContextTokens` | 150000 | Set this token threshold for restart timing (0 = off); re-said every 50k after. The settings window has one **Restart due at** field accepting `275000`, `275k`, `1.2m`, `0` or `off`, with the matching read-only percent of the current window (e.g. `275k (27% of 1M)`). |
 | `restartAtPhaseEnd` | false | Also restart at the end of each phase (a line in the system prompt tells the model). Off, restarts follow the context threshold above, or happen when you ask. |
-| `reviewTiers` | `why-behind every 5`, `deep every 10` | Restart review tiers, one line each: `[name:] <type> every <N>` (N = every Nth restart, 0 = off; unparsable lines are skipped). `restart_session` reads `docs/restart_count.txt` and puts each due tier's instructions in front of the resume prompt. Types: `why-behind` (each goal metric vs its target in absolute units, time since it last moved, is the work closing the gap or tuning; rethink if it can't reach the goal, tell the user the decision) and `deep` (the last N restarts' handoffs, fix log, lessons and results: waste, rules broken twice with no check, stalled tools, drift; writes `docs/research/deep_review_<n>.md`, sends the top 3). Both carry the lessons pass and a foot-guns section. The settings window's Restarts section sets each tier's interval with buttons. |
+| `reviewTiers` | `why-behind every 5`, `deep every 10` | Restart review tiers, one line each: `[name:] <type> every <N>` (N = every Nth restart, 0 = off; unparsable lines are skipped). `restart_session` reads `docs/restart_count.txt` and puts each due tier's instructions in front of the resume prompt. Types: `why-behind` (each goal metric vs its target in absolute units, time since it last moved, is the work closing the gap or tuning; rethink if it can't reach the goal, tell the user the decision) and `deep` (the last N restarts' handoffs, fix log, lessons and results: waste, rules broken twice with no check, stalled tools, drift; writes `docs/research/deep_review_<n>.md`, sends the top 3). Both carry the lessons pass and a foot-guns section. The settings window's Restarts section has a number field for each tier's interval (0 = off). |
 | `restartMode` | compact | How `restart_session` resets the context, or `off`: no restarts at all (`restart_session` refuses and queues nothing, the restart clock never says one is due, no phase-end line). Also three buttons in the settings window. `clear`: `/clear`, then the resume prompt as the next user message. `compact`: `/compact <focus>` (keep the task state and open items), then the resume prompt, the restart number and the `RESUME HERE` block of `resumeFile` (read from disk at the compaction, cut at 12k chars) go in as SessionStart(compact) context, and a background-task notification (a `cat` of `~/.claude/stool/restart-wake.txt`) starts the next turn, so nothing shows as your message; if that task cannot start, or no turn starts within 60 s, a framed `[automated ...]` plugin prompt goes instead. Compaction keeps the process: background tasks and other plugins' state survive. Set Claude Code's own `/autocompact` threshold above `restartContextTokens` so stool's restart fires first. |
 | `resumeFile` | `docs/HANDOFF.md` | The handoff whose `## RESUME HERE` block (to the next `## ` header; heading from `restartHandoffHeading`) a compact restart injects, relative to the session folder or absolute. Missing file or block: only the resume prompt goes in, and the text says so. |
 | `trial` | off | Randomized trial of the cost levers on your own sessions. With it on, `trialOffShare` percent (default 20) of sessions, chosen by session id, run with the token restart nudge, the default agent cap and the governor off; each session's arm goes to `~/.claude/stool/trial.jsonl`. After a week or two, `node bench/trial.mjs` compares cost per commit between the arms. |
@@ -106,7 +106,7 @@ All options are plugin `userConfig` fields. Lists are lists of strings; "regex s
 | `captureProcess` | empty | Windows process name (no `.exe`) counted for the strip. Empty = no strip value. |
 | `restartPublishCounter` | false | Count commands matching `restartPublishPattern`; a restart is due after `restartPublishesAt` of them since the handoff was last rewritten. |
 | `restartPublishPattern` | empty | Regex source for the commands to count (a deploy or publish script). |
-| `restartPublishesAt` | 3 | Count at which a restart is due. |
+| `restartPublishesAt` | 3 | Positive whole-number count at which a restart is due; editable in the settings window. |
 | `restartHandoffLint` | false | Warn when a write to the handoff file leaves two heading blocks or a stale `YYYY-MM-DD HH:MMZ` time. |
 | `restartHandoffFile` | `HANDOFF.md` | File name the lint and the counter reset watch. |
 | `restartHandoffHeading` | `RESUME HERE` | Heading text (after `## `) of the block rewritten on each restart. |
@@ -194,7 +194,9 @@ The review tiers are deeper looks on a schedule. `docs/restart_count.txt` counts
 - **why-behind**, every 5th restart by default: is the goal metric closing its gap (absolute units, time since it last moved), or is the work tuning around it? Rethink the approach if it can't get there, and tell the user.
 - **deep**, every 10th: a review of the last ten restarts (waste against progress, repeated slips with no check script, stalled tools, drift), written to `docs/research/deep_review_<n>.md`, with lessons consolidated and the top 3 fixes sent to the user.
 
-Set them in `/config` → stool → `reviewTiers` (`deep every 20`, `goal: why-behind every 3`, `deep every 0` to turn one off) or with the interval buttons in the settings window.
+Text and number fields in the Restarts card save on Enter or blur. Invalid values stay visible with an inline error and are not saved. The handoff field accepts a path relative to the session folder or an absolute path. Restart mode and governor keep their buttons.
+
+Set them in `/config` → stool → `reviewTiers` (`deep every 20`, `goal: why-behind every 3`, `deep every 0` to turn one off) or by typing the intervals in the settings window.
 
 ## State and files
 

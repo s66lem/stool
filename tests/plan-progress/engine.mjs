@@ -50,7 +50,7 @@ export async function boot(file, kept = new Map(), state = new Map(), options = 
       read: async p => files.get(p).text,
     },
     agent: { list: async () => [...listed].map(([id, status]) => ({ id, status })) },
-    session: { id: async () => 'session-1' },
+    session: { id: async () => 'session-1', usage: async () => ({ context: { window: 1_000_000 } }) },
     env: { get: async k => (k === 'USERPROFILE' || k === 'HOME' ? 'C:/Users/t' : undefined) },
     audio: { play: async ({ asset }) => void sounds.push(asset) },
     process: { run: async () => ({}) },
@@ -59,7 +59,7 @@ export async function boot(file, kept = new Map(), state = new Map(), options = 
     command: { register: async () => {} },
     config: { list: async () => [], set: async ({ key, value }) => (configSet.push({ key, value }), { value }) },
     ui: {
-      resolve: e => (e?.surface === 'terminal' ? { Box: 'Box', Button: 'Button', Text: 'Text', Raster: 'Raster' } : { Box: 'Box', Button: 'Button', Text: 'Text', Svg: 'Svg' }),
+      resolve: e => (e?.surface === 'terminal' ? { Box: 'Box', Button: 'Button', Input: 'Input', Text: 'Text', Raster: 'Raster' } : { Box: 'Box', Button: 'Button', Input: 'Input', Text: 'Text', Svg: 'Svg' }),
       toast: () => {},
       blit: async args => (blits.push(args), {}),
       open: async args => (opened.push(args), { isPlaced: true }),
@@ -126,6 +126,7 @@ export async function boot(file, kept = new Map(), state = new Map(), options = 
     tree: (surface, bodyColumns = 100, isFullscreen = true) => dispatch('ui.render', { component: 'AbovePrompt', surface, requestId: 'r1', viewport: { isFullscreen }, props: { bodyColumns, hasSurvey: false } }, () => null),
     // other hooks, as the engine would run them
     render: (component, extra = {}) => dispatch('ui.render', { component, surface: 'desktop', props: { modes: [] }, ...extra }, () => null),
+    focus: element => dispatch('ui.focus', { component: 'Pane', requestId: 'settings', plugin: 'stool', element }, () => ({})),
     command: command => dispatch('command.run', { command }, () => ({})),
     complete: () => dispatch('turn.complete', { reason: 'answer' }, () => ({})),
     svgs: async () => {

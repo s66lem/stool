@@ -418,14 +418,14 @@ const C = {
     const tree = await E.render('Pane', { requestId: 'settings' })
     await find(tree, 'planProgress').props.onPress()
     await find(tree, 'usageStrip').props.onPress()
-    await find(tree, 'tier-0-3').props.onPress()
-    await find(tree, 'tier-1-0').props.onPress()
+    await find(tree, 'restart-input-tier-0').props.onSubmit('3')
+    await find(tree, 'restart-input-tier-1').props.onSubmit('0')
     const got = JSON.stringify(E.configSet)
     const want = JSON.stringify([
       { key: 'stool.planProgress', value: false },
       { key: 'stool.usageStrip', value: false },
       { key: 'stool.reviewTiers', value: ['why-behind every 3', 'deep every 10'] },
-      { key: 'stool.reviewTiers', value: ['why-behind every 5', 'deep every 0'] },
+      { key: 'stool.reviewTiers', value: ['why-behind every 3', 'deep every 0'] },
     ])
     return [got, got === want && !!find(tree, 'restartAtPhaseEnd')]
   },
@@ -436,43 +436,35 @@ const C = {
     await F.command('plan-progress-settings')
     const tree = await F.render('Pane', { requestId: 'settings' })
     const label = k => find(tree, k)?.props.label
-    const shown = [label('planProgress'), label('usageStrip'), label('restartAtPhaseEnd'), find(tree, 'tier-0-7')?.props.variant, texts(tree).includes('Review: goal')]
-    await find(tree, 'tier-0-0').props.onPress()
+    const shown = [label('planProgress'), label('usageStrip'), label('restartAtPhaseEnd'), find(tree, 'restart-input-tier-0')?.props.value, texts(tree).includes('Review: goal')]
+    await find(tree, 'restart-input-tier-0').props.onSubmit('0')
     await find(tree, 'restartAtPhaseEnd').props.onPress()
     await find(tree, 'planProgress').props.onPress()
     const got = JSON.stringify(F.configSet)
-    const ok = JSON.stringify(shown) === JSON.stringify(['○ Off', '○ Off', '● On', 'primary', true]) && F.opened[0]?.id === 'settings' && got === JSON.stringify([{ key: 'stool.reviewTiers', value: ['goal: why-behind every 0'] }, { key: 'stool.restartAtPhaseEnd', value: false }, { key: 'stool.planProgress', value: true }])
+    const ok = JSON.stringify(shown) === JSON.stringify(['○ Off', '○ Off', '● On', '7', true]) && F.opened[0]?.id === 'settings' && got === JSON.stringify([{ key: 'stool.reviewTiers', value: ['goal: why-behind every 0'] }, { key: 'stool.restartAtPhaseEnd', value: false }, { key: 'stool.planProgress', value: true }])
     return [`${JSON.stringify(shown)} ${got}`, ok]
   },
   async settings_restart_controls(E) {
     const find = (n, key) => (Array.isArray(n) ? n.map(c => find(c, key)).find(Boolean) : n && typeof n === 'object' ? (n.props?.key === key ? n : (n.children ?? []).map(c => find(c, key)).find(Boolean)) : undefined)
     const F = await boot(file, new Map(), new Map(), { restartMode: 'off', restartContextTokens: 275_000, resumeFile: 'dev/HANDOFF.md', governor: false })
-    await F.command('plan-progress-settings')
     const tree = await F.render('Pane', { requestId: 'settings' })
-    const v = k => find(tree, k)?.props.variant ?? find(tree, k)?.props.label
-    const shown = [v('restartMode-off'), v('restartMode-compact'), v('ctxTokens-275000'), v('ctxAt-65'), v('resumeFile-dev/HANDOFF.md'), v('publishesAt-3'), find(tree, 'governor')?.props.label]
-    for (const k of ['restartMode-compact', 'restartMode-clear', 'ctxTokens-0', 'ctxAt-80', 'resumeFile-docs/HANDOFF.md', 'publishesAt-5', 'governor']) await find(tree, k).props.onPress()
-    // the defaults draw as set: compact, 150k, docs/HANDOFF.md, governor on
-    const D = await boot(file, new Map(), new Map(), {})
-    await D.command('plan-progress-settings')
-    const dt = await D.render('Pane', { requestId: 'settings' })
-    const dv = k => find(dt, k)?.props.variant ?? find(dt, k)?.props.label
-    const defaults = [dv('restartMode-compact'), dv('ctxTokens-150000'), dv('resumeFile-docs/HANDOFF.md'), find(dt, 'governor')?.props.label]
-    const got = JSON.stringify(F.configSet)
-    const want = JSON.stringify([
+    const shown = ['restartContextTokens', 'resumeFile', 'restartPublishesAt'].map(k => find(tree, 'restart-input-' + k)?.props.value)
+    await find(tree, 'restartMode-compact').props.onPress()
+    await find(tree, 'restartMode-clear').props.onPress()
+    await find(tree, 'restart-input-restartContextTokens').props.onSubmit('off')
+    await find(tree, 'restart-input-resumeFile').props.onSubmit('docs/HANDOFF.md')
+    await find(tree, 'restart-input-restartPublishesAt').props.onSubmit('5')
+    await find(tree, 'governor').props.onPress()
+    const want = [
       { key: 'stool.restartMode', value: 'compact' },
       { key: 'stool.restartMode', value: 'clear' },
       { key: 'stool.restartContextTokens', value: 0 },
-      { key: 'stool.restartContextAt', value: 80 },
       { key: 'stool.resumeFile', value: 'docs/HANDOFF.md' },
       { key: 'stool.restartPublishesAt', value: 5 },
       { key: 'stool.governor', value: true },
-    ])
-    const ok =
-      JSON.stringify(shown) === JSON.stringify(['primary', 'Compact', 'primary', 'primary', 'primary', 'primary', '○ Off']) &&
-      JSON.stringify(defaults) === JSON.stringify(['primary', 'primary', 'primary', '● On']) &&
-      got === want
-    return [`${JSON.stringify(shown)} ${JSON.stringify(defaults)} ${got}`, ok]
+    ]
+    const ok = JSON.stringify(shown) === JSON.stringify(['275000', 'dev/HANDOFF.md', '3']) && !find(tree, 'row-restartContextAt') && JSON.stringify(F.configSet) === JSON.stringify(want)
+    return [JSON.stringify(F.configSet), ok]
   },
   async stop_still_blocks_open_bar(E) {
     await E.turnStart()

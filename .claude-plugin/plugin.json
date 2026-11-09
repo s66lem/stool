@@ -1,6 +1,6 @@
 {
   "name": "stool",
-  "version": "2.18.0",
+  "version": "2.18.1",
   "description": "Claude Code mods in one plugin: plan-progress bars and usage strip, agent cap, keep-warm, restart tools, agent meter, and opt-in dispatch, lead and capture guards, plus a set of workflow skills.",
   "license": "MIT",
   "author": { "name": "s66lem" },
@@ -144,14 +144,14 @@
     "restartContextAt": {
       "type": "number",
       "title": "Restart due at context %",
-      "description": "The restart clock says a restart is due when the main conversation reaches this context percent",
+      "description": "Legacy context-percent threshold for back-compat; whichever threshold comes first still triggers the clock. Set restartContextTokens instead (the settings window shows its matching percent).",
       "default": 65,
       "min": 1
     },
     "restartContextTokens": {
       "type": "number",
-      "title": "Restart due at context tokens",
-      "description": "The restart clock also says a restart is due when the main conversation reaches this many context tokens (0 = off). Every message re-reads the whole context, so cost climbs with it",
+      "title": "Restart due at",
+      "description": "Set this token threshold for restart timing (0 = off). The settings window accepts 275000, 275k, 1.2m or off and shows the matching percent of the current context window. The legacy restartContextAt threshold can still trigger first.",
       "default": 150000,
       "min": 0
     },
@@ -165,7 +165,7 @@
       "type": "string",
       "multiple": true,
       "title": "Restart review tiers",
-      "description": "One line per tier: '[name:] <type> every <N>', type why-behind (goal vs gap check) or deep (deep review), N = every Nth restart (0 = off), counted in docs/restart_count.txt. A due tier goes in front of the resume prompt",
+      "description": "One line per tier: '[name:] <type> every <N>', type why-behind (goal vs gap check) or deep (deep review), N = every Nth restart (0 = off), counted in docs/restart_count.txt. A due tier goes in front of the resume prompt; type each interval in the settings window (Enter or blur saves, 0 = off)",
       "default": [
         "why-behind every 5",
         "deep every 10"
@@ -180,7 +180,7 @@
     "resumeFile": {
       "type": "string",
       "title": "Restart: handoff file for compact mode",
-      "description": "Handoff file whose RESUME HERE block (restartHandoffHeading) a compact restart injects, relative to the session folder or absolute",
+      "description": "Handoff file whose RESUME HERE block (restartHandoffHeading) a compact restart injects, relative to the session folder or absolute; enter a nonempty path in the settings window (Enter or blur saves)",
       "default": "docs/HANDOFF.md"
     },
     "trial": {
@@ -298,7 +298,7 @@
     "restartPublishesAt": {
       "type": "number",
       "title": "Restart clock: publishes before a restart",
-      "description": "Count at which a restart is due",
+      "description": "Positive whole-number count at which a restart is due; type a number in the settings window (Enter or blur saves)",
       "default": 3,
       "min": 1
     },

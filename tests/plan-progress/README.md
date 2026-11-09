@@ -10,6 +10,7 @@ node compile.cjs ../../hooks/plan-progress/register.tsx register.mjs
 node compile.cjs ../../hooks/config.ts config.mjs
 node compile.cjs ../../hooks/plan-progress/strip.ts strip.mjs && node compile.cjs ../hooks/strip-icons.ts strip-icons.mjs
 node regress.mjs          # expected behaviour, must print "all passed"
+node --test settings.test.mjs # editable restart fields, validation, Enter/blur saves
 node strip.test.mjs       # the usage strip's formats and placement; writes strip-look.html
 node scenarios.mjs        # the 32 audit cases, prints what each one does now
 node look.mjs             # writes look.html: the bars as the desktop draws them, for a browser

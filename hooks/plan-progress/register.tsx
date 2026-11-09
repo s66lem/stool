@@ -1555,7 +1555,7 @@ async function setChoice($: EngineInterface, key: typeof AUTOCLOSE | typeof SPEE
 // A press while a set is on its way is dropped
 let isSettingOption = false
 async function setOption($: EngineInterface, field: string, value: boolean | number | string | string[]) {
-  if (isSettingOption) return
+  if (isSettingOption) return false
   isSettingOption = true
   try {
     const once = () =>
@@ -1569,6 +1569,7 @@ async function setOption($: EngineInterface, field: string, value: boolean | num
       set = await once()
     }
     if (set.deny) $.ui.toast(`progress bars: ${set.deny}`)
+    return !set.deny
   } finally {
     isSettingOption = false
   }
@@ -1595,16 +1596,25 @@ export const register: Register = (on, options) => {
   const isBarsOn = options?.planProgress !== false
   // usageStrip off: the strip above the bars is not drawn (the /ribbon command still answers)
   const isStripOn = options?.usageStrip !== false
-  const tiers = parseTiers(options?.reviewTiers)
+  let tiers = parseTiers(options?.reviewTiers)
   // the Restarts card: each restart option as set now (the parts read the same fields with the same defaults)
   const optNum = (k: string, d: number) => (typeof options?.[k] === 'number' && Number.isFinite(options[k]) ? (options[k] as number) : d)
   const optText = (k: string, d: string) => (typeof options?.[k] === 'string' && (options[k] as string).trim() ? (options[k] as string).trim() : d)
   const restartMode = ((m: string) => (m === 'clear' || m === 'off' ? m : 'compact'))(optText('restartMode', 'compact').toLowerCase())
   const ctxTokens = optNum('restartContextTokens', 150_000)
-  const ctxAt = optNum('restartContextAt', 65)
   const publishesAt = optNum('restartPublishesAt', 3)
   const resumeFile = optText('resumeFile', 'docs/HANDOFF.md')
   const isGovernorOn = options?.governor !== false
+  // Keep partial entries through desktop redraws.
+  const edits = new Map<string, { text: string; saved: string; error: string; pending?: Promise<void>; commit: () => Promise<void> }>()
+  let editSaves = Promise.resolve()
+  let focusedEdit: string | undefined
+  on('ui.focus', { component: 'Pane', requestId: SETTINGS }, async ($, e, next) => {
+    const key = e.plugin === 'stool' ? e.element : undefined
+    if (focusedEdit && focusedEdit !== key) await edits.get(focusedEdit)?.commit()
+    focusedEdit = key && edits.has(key) ? key : undefined
+    return next(e)
+  })
   // per-turn bookkeeping; module variables are fine here, a reload just starts a fresh count
   let workCalls = 0
   let sinceUpdate = 0
@@ -1942,13 +1952,12 @@ export const register: Register = (on, options) => {
     )
   })
 
-  // the settings window: what is running now, then Progress bars, Footer, Agents, Restarts, About. Every control is a
-  // Button (an open list or a half-typed field would not survive the desktop building the window anew at each redraw)
+  // Text drafts survive redraws; Enter or leaving a field commits it.
   on('ui.render', { component: 'Pane', requestId: SETTINGS }, async ($, e) => {
     const s = await read($, speed)
     await read($, prefs)
     await read($, tick)
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const { Box, Button, Text, Input } = $.ui.resolve(e)
     const secs = Math.round(doneStaysMs / 1000)
     // /config takes any seconds: one the window has no cell for gets its own
     const stays = STAYS.includes(secs) ? STAYS : [...STAYS, secs].sort((a, b) => a - b)
@@ -1967,9 +1976,52 @@ export const register: Register = (on, options) => {
         ))}
       </Box>
     )
-    const nums = (list: number[], now: number) => [...new Set([...list, now])].sort((a, b) => a - b)
-    const row = (key: string, title: string, about: string, control: unknown) => (
-      <Box key={`row-${key}`} flexDirection="row" alignItems="center" gap={1} marginTop={1}>
+    const window = await $.session.usage().then(u => u.context.window).catch(() => undefined)
+    const shortTokens = (n: number) => n >= 1_000_000 ? `${n / 1_000_000}M` : n >= 1000 ? `${n / 1000}k` : String(n)
+    const entry = (key: string, initial: string, kind: 'tokens' | 'path' | 'number', save: (v: string | number) => Promise<boolean>, min = 0) => {
+      const id = `restart-input-${key}`
+      let draft = edits.get(id)
+      if (!draft) {
+        draft = { text: initial, saved: initial, error: '', commit: async () => {} }
+        edits.set(id, draft)
+      }
+      const d = draft
+      const parse = () => {
+        const raw = d.text.trim()
+        if (kind === 'path') return raw && !/[\x00-\x1f]/.test(raw) ? raw : undefined
+        if (kind === 'tokens' && raw.toLowerCase() === 'off') return 0
+        const m = raw.match(kind === 'tokens' ? /^(\d+(?:\.\d+)?)([km]?)$/i : /^(\d+)$/)
+        const n = m ? Number(m[1]) * (m[2]?.toLowerCase() === 'm' ? 1_000_000 : m[2]?.toLowerCase() === 'k' ? 1000 : 1) : NaN
+        return Number.isSafeInteger(n) && n >= min ? n : undefined
+      }
+      d.commit = () => {
+        if (d.pending) return d.pending
+        const value = parse()
+        d.error = value === undefined ? `Invalid value: ${JSON.stringify(d.text)}. ${kind === 'path' ? 'Enter a nonempty path without control characters.' : kind === 'tokens' ? 'Use whole tokens, k, m, 0 or off.' : `Enter a whole number ≥ ${min}.`}` : ''
+        if (value === undefined || d.text === d.saved) return update($, tick, n => n + 1).then(() => {})
+        const submitted = d.text
+        d.pending = editSaves.then(() => save(value)).then(ok => { if (ok) d.saved = submitted }).finally(() => { d.pending = undefined })
+        editSaves = d.pending.catch(() => {})
+        return d.pending
+      }
+      const n = parse()
+      const matching = kind === 'tokens' && typeof n === 'number'
+        ? n === 0 ? 'Off' : `${shortTokens(n)} (${window && window > 0 ? `${Math.floor(100 * n / window)}% of ${shortTokens(window)}` : 'context window unavailable'})`
+        : ''
+      return (
+        <Box key={`entry-${key}`} flexDirection="column">
+          <Box flexDirection="row" gap={1}>
+            <Input key={id} value={d.text} submitLabel="save"
+              onInput={async value => { d.text = value; d.error = ''; focusedEdit = id; await update($, tick, n => n + 1) }}
+              onSubmit={async value => { d.text = value; await d.commit(); await update($, tick, n => n + 1) }} />
+            {matching ? <Text dimColor>{matching}</Text> : null}
+          </Box>
+          {d.error ? <Text color="#FF9FA0">{d.error}</Text> : null}
+        </Box>
+      )
+    }
+    const row = (key: string, title: string, about: string, control: unknown, stacked = false) => (
+      <Box key={`row-${key}`} flexDirection={stacked ? 'column' : 'row'} alignItems={stacked ? 'stretch' : 'center'} gap={1} marginTop={1}>
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
           <Text>{title}</Text>
           <Text dimColor>{about}</Text>
@@ -2050,7 +2102,7 @@ export const register: Register = (on, options) => {
         {card('Usage ledger', 'for the usage_since tool; off until switched on', ...part('Usage'))}
         {card(
           'Restarts',
-          'how and when the session restarts, and reviews every Nth restart; patterns and file names are in /config',
+          'how and when the session restarts, and reviews every Nth restart; Enter or blur saves fields',
           row(
             'restartMode',
             'Restart mode',
@@ -2061,21 +2113,22 @@ export const register: Register = (on, options) => {
                 : 'Compact: /compact, the resume prompt and RESUME HERE as context, a background wake. Background tasks survive.',
             pick('restartMode', 'restartMode', [['compact', 'Compact'], ['clear', 'Clear'], ['off', 'Off']], restartMode),
           ),
-          row('restartContextTokens', 'Restart due at context tokens', "Every message re-reads the whole context. Keep Claude Code's /autocompact above it, so stool's restart comes first.", pick('ctxTokens', 'restartContextTokens', nums([0, 100_000, 150_000, 200_000, 275_000], ctxTokens).map(n => [n, n === 0 ? 'Off' : `${Math.round(n / 1000)}k`]), ctxTokens)),
-          row('restartContextAt', 'Restart due at context %', 'Of the context window; on a 1M window the token threshold comes first.', pick('ctxAt', 'restartContextAt', nums([50, 65, 80], ctxAt).map(n => [n, `${n}%`]), ctxAt)),
+          row('restartContextTokens', 'Restart due at', 'Enter tokens (275000, 275k, 1.2m); 0 or off disables this threshold. Keep /autocompact above it.', entry('restartContextTokens', String(ctxTokens), 'tokens', v => setOption($, 'restartContextTokens', v)), true),
           row('governor', 'Governor', 'Lowers the token threshold while the 5-hour or weekly window runs hot.', sw('governor', isGovernorOn, () => setOption($, 'governor', !isGovernorOn))),
-          row('resumeFile', 'Handoff for compact restarts', 'Its RESUME HERE block goes in after the summary; relative to the session folder.', pick('resumeFile', 'resumeFile', [...new Set(['docs/HANDOFF.md', 'dev/HANDOFF.md', 'HANDOFF.md', resumeFile])].map(f => [f, f]), resumeFile)),
-          row('restartPublishesAt', 'Publishes before a restart', 'Used by the publish counter below.', pick('publishesAt', 'restartPublishesAt', nums([2, 3, 5], publishesAt).map(n => [n, `${n}`]), publishesAt)),
+          row('resumeFile', 'Handoff for compact restarts', 'Its RESUME HERE block goes in after the summary; path relative to the session folder or absolute.', entry('resumeFile', resumeFile, 'path', v => setOption($, 'resumeFile', v)), true),
+          row('restartPublishesAt', 'Publishes before a restart', 'Used by the publish counter below; a whole number of at least 1.', entry('restartPublishesAt', String(publishesAt), 'number', v => setOption($, 'restartPublishesAt', v), 1), true),
           ...tiers.map((t, i) =>
             row(
               `tier-${i}`,
               `Review: ${t.name}`,
-              t.type === 'deep' ? 'Deep review of the last restarts: waste, repeated slips, stalled tools, drift into tuning, lessons.' : 'Goal against gap: is the work closing the measured gap, or tuning? Rethink if it cannot reach the goal.',
-              <Box key={`tier-${i}`} flexDirection="row" flexShrink={0}>
-                {[...new Set([0, 3, 5, 10, 20, t.every])].sort((a, b) => a - b).map(k => (
-                  <Button key={`tier-${i}-${k}`} dimColor={k !== t.every} {...(k === t.every ? { variant: 'primary' as const } : { plain: true })} label={k === 0 ? 'Off' : `${k}`} onPress={() => setOption($, 'reviewTiers', tiers.map((x, j) => tierLine(j === i ? { ...x, every: k } : x)))} />
-                ))}
-              </Box>,
+              (t.type === 'deep' ? 'Deep review of the last restarts: waste, repeated slips, stalled tools, drift into tuning, lessons.' : 'Goal against gap: is the work closing the measured gap, or tuning? Rethink if it cannot reach the goal.') + ' Every Nth restart; 0 = off.',
+              entry(`tier-${i}`, String(t.every), 'number', async v => {
+                const next = tiers.map((x, j) => j === i ? { ...x, every: Number(v) } : x)
+                const ok = await setOption($, 'reviewTiers', next.map(tierLine))
+                if (ok) tiers = next
+                return ok
+              }),
+              true,
             ),
           ),
           ...part('Restarts'),
@@ -2083,7 +2136,7 @@ export const register: Register = (on, options) => {
         <Box key="about" flexDirection="column" marginTop={1}>
           <Text bold>About</Text>
           <Text dimColor>{`stool ${aboutVersion || '?'} · progress bars forked from zycck/plan-progress (MIT)`}</Text>
-          <Text dimColor>A switch saves to your settings and the mod reloads in a moment.</Text>
+          <Text dimColor>Buttons save immediately; fields save on Enter or blur. The mod reloads in a moment.</Text>
         </Box>
       </Box>
     )
