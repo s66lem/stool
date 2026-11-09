@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { at, chart, currentWeek, downsample, hourly, project, readouts, span, summary } from '../hooks/burn-pace/burn'
+import { at, BOX, chart, currentWeek, downsample, hourly, labelBox, project, readouts, span, summary } from '../hooks/burn-pace/burn'
 
 const H = 3600_000
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6
@@ -24,8 +24,8 @@ test('reads only the current week', () => {
   expect(currentWeek('')).toBe(undefined)
 })
 
-const LINE1 = 'used 64% · pace last 24 h 1.0 pts/hr · week avg 0.7 pts/hr'
-const LINE2 = 'to last until reset you can spend 0.5 pts/hr · runs out Wed 7am'
+const LINE1 = 'used 64% · pace 1.0 pts/hr (24 h) · avg 0.7'
+const LINE2 = 'can spend 0.5 pts/hr · runs out Wed 7am'
 const slow = (h: number) => (h <= 72 ? 28 : 28 + (h - 72) / 2) // 40% now, +12 pts over the last 24 h
 const fast = (h: number) => (h <= 72 ? 40 : 40 + (h - 72)) // 64% now, +24 pts over the last 24 h
 // 40% to h72, +0.5/h to h90 (49%), then +2/h: 61% now; the last 6 h run four times the 24 h pace's second half
@@ -43,8 +43,8 @@ test('pace in pts/hr over the last 24 h, the week average, the can-spend rate; s
   expect(r6(p.pace.atReset)).toBe(76)
   expect(p.pace.outAt).toBe(null)
   expect(readouts(p, 'UTC')).toEqual([
-    'used 40% · pace last 24 h 0.5 pts/hr · week avg 0.4 pts/hr',
-    'to last until reset you can spend 0.8 pts/hr · lasts to reset, ends ~76%',
+    'used 40% · pace 0.5 pts/hr (24 h) · avg 0.4',
+    'can spend 0.8 pts/hr · lasts, ends ~76%',
   ])
   expect(chart(w, p, NOW, 'UTC')).toContain('ends ~76%')
 })
@@ -74,12 +74,12 @@ test('the pace window picks which pace the readout and projection use', () => {
   const p = project(w, NOW, 6)
   expect(r6(p.pace.rate)).toBe(2)
   expect(r6(p.pace.outAt!)).toBe(NOW + 19.5 * H) // 39 pts at 2/h
-  expect(readouts(p, 'UTC')[0]).toBe('used 61% · pace last 6 h 2.0 pts/hr · week avg 0.6 pts/hr')
-  expect(readouts(p, 'UTC')[1]).toBe('to last until reset you can spend 0.5 pts/hr · runs out Tue 2:30pm')
+  expect(readouts(p, 'UTC')[0]).toBe('used 61% · pace 2.0 pts/hr (6 h) · avg 0.6')
+  expect(readouts(p, 'UTC')[1]).toBe('can spend 0.5 pts/hr · runs out Tue 2:30pm')
   expect(chart(w, p, NOW, 'UTC')).toContain('last 6 h pace</text>')
 })
 
-test('hourly bars: one per hour up to now, the points gained that hour, hover titles per hour', () => {
+test('hourly bars: one per hour up to now, the points gained that hour, a hidden hover readout per hour', () => {
   const w = currentWeek(log(fast))!
   const hs = hourly(w, NOW)
   expect(hs).toHaveLength(96)
@@ -88,9 +88,60 @@ test('hourly bars: one per hour up to now, the points gained that hour, hover ti
   expect(hs[95]).toEqual({ t: NOW - H, pct: 64, gain: 1 })
   const svg = chart(w, project(w, NOW), NOW, 'UTC')
   expect(hits(svg)).toBe(168)
-  expect(svg).toContain('<title>Mon 6pm · 64% · +1.0 pts/hr</title>')
-  expect(svg).toContain('<title>Mon 7pm · ~65% at last 24 h pace</title>')
-  expect(svg).toContain('.h:hover .g{opacity:.7}')
+  expect(svg).toContain('Mon 6pm · 64% · +1.0/h</text>')
+  expect(svg).toContain('Mon 7pm · ~65% at pace</text>')
+  expect(svg).toContain('.h:hover .r{visibility:visible}')
+})
+
+// each hover group: its hit rect (x, width) and its label box (x, width)
+const groups = (svg: string) =>
+  svg.split('<g class="h">').slice(1).map(s => {
+    const n = [...s.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/g)].map(m => [Number(m[1]), Number(m[2])] as const)
+    return { hit: n[0]!, label: n[1]! }
+  })
+
+test('narrow-pane svg: viewBox only (no root width or height), no <title>, no dimming, one readout per hour', () => {
+  const w = currentWeek(log(fast))!
+  for (const range of ['week', '48h'] as const) {
+    const svg = chart(w, project(w, NOW), NOW, 'UTC', range)
+    const root = svg.slice(0, svg.indexOf('>') + 1)
+    expect(root).toContain(`viewBox="0 0 ${BOX.W} ${BOX.Ht}"`)
+    expect(root).toContain('width:100%')
+    expect(/\swidth="/.test(root)).toBe(false)
+    expect(/\sheight="/.test(root)).toBe(false)
+    expect(root).toContain('font-size="12"')
+    expect(svg).not.toContain('<title')
+    expect(svg).not.toContain('opacity:')
+    const gs = groups(svg)
+    expect(gs).toHaveLength(range === 'week' ? 168 : 48)
+    expect(svg.split('<g class="r">').length - 1).toBe(gs.length)
+    // hit rects tile the plot: adjacent, never overlapping, inside the plot
+    expect(gs[0]!.hit[0]).toBe(BOX.L)
+    for (let i = 1; i < gs.length; i++) expect(Math.abs(gs[i]!.hit[0] - (gs[i - 1]!.hit[0] + gs[i - 1]!.hit[1]))).toBeLessThan(0.15)
+    const last = gs[gs.length - 1]!.hit
+    expect(Math.abs(last[0] + last[1] - (BOX.W - BOX.R))).toBeLessThan(0.15)
+    // every label stays inside the viewBox, the last hours' flipped left of the guide
+    for (const g of gs) {
+      expect(g.label[0]).toBeGreaterThanOrEqual(0)
+      expect(g.label[0] + g.label[1]).toBeLessThanOrEqual(BOX.W)
+    }
+    const lastGuide = last[0] + last[1] / 2
+    expect(gs[gs.length - 1]!.label[0] + gs[gs.length - 1]!.label[1]).toBeLessThan(lastGuide)
+    expect(gs[0]!.label[0]).toBeGreaterThan(gs[0]!.hit[0])
+  }
+  // the hovered hour's dot sits on the actual line: Mon 6pm (h 95) at 64%
+  expect(chart(w, project(w, NOW), NOW, 'UTC')).toMatch(/<circle cx="[\d.]+" cy="[\d.]+" r="3.5" fill="#d97757" stroke="white"/)
+})
+
+test('label box: right of the guide, flipped left near the right edge, clamped inside the viewBox', () => {
+  const text = 'Wed 12pm · ~100% at pace'
+  const a = labelBox(BOX.L + 2, text)
+  expect(a.x).toBe(Math.round(BOX.L + 8))
+  const b = labelBox(BOX.W - BOX.R - 1, text)
+  expect(b.x + b.w).toBeLessThan(BOX.W - BOX.R - 1)
+  expect(b.x).toBeGreaterThanOrEqual(0)
+  const huge = labelBox(BOX.W / 2, 'x'.repeat(80))
+  expect(huge.x).toBeGreaterThanOrEqual(0)
 })
 
 test('range: the week, or 48 h (36 h back, 12 h ahead) kept inside the week', () => {
@@ -101,7 +152,7 @@ test('range: the week, or 48 h (36 h back, 12 h ahead) kept inside the week', ()
   expect(span(w, reset - H, '48h')).toEqual([reset - 48 * H, reset])
   const svg = chart(w, project(w, NOW), NOW, 'UTC', '48h')
   expect(hits(svg)).toBe(48)
-  expect(svg).toContain('<title>Mon 6pm · 64% · +1.0 pts/hr</title>')
+  expect(svg).toContain('Mon 6pm · 64% · +1.0/h</text>')
 })
 
 test('a dense week (a reading a minute) stays under the Svg cap', () => {
@@ -176,7 +227,7 @@ test('/burn opens a pane with the same chart', ON, async ($, on) => {
   expect(hits(await svg())).toBe(168)
   // the buttons switch the pace window (readout and projection) and the range, and the pane redraws
   await ui.press({ key: 'burn-window-1' })
-  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe('used 64% · pace last 1 h 1.0 pts/hr · week avg 0.7 pts/hr')
+  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe('used 64% · pace 1.0 pts/hr (1 h) · avg 0.7')
   expect(await svg()).toContain('last 1 h pace</text>')
   await ui.press({ key: 'burn-range-48h' })
   expect(hits(await svg())).toBe(48)

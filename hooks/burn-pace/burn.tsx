@@ -1,7 +1,7 @@
 // the Weekly burn chart (the /burn pane and the settings window): this week's weekly-limit readings from the
 // usage-pace log, a readouts row (used, pace in pts/hr, week average, what you can spend to last until the reset,
 // when it runs out), two projections (week average and the chosen pace window), the 100% limit, and an hourly
-// pts/hr bar strip under the chart; hover shows each hour, buttons switch the range and the pace window
+// pts/hr bar strip under the chart, sized for a narrow side pane; hover shows each hour's readout, buttons switch the range and the pace window
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderInput } from 'claude-code'
 
@@ -122,11 +122,11 @@ export const at = (ms: number, timeZone?: string) => {
 }
 
 const f1 = (x: number) => x.toFixed(1)
-/** The readouts, two lines: what is used and the paces; what lasts and when it runs out. */
+/** The readouts, two short lines for a narrow pane: what is used and the paces; what lasts and when it runs out. */
 export const readouts = (p: Projection, timeZone?: string): [string, string] => [
-  `used ${Math.round(p.now)}% · pace last ${p.window} h ${f1(p.pace.rate)} pts/hr · week avg ${f1(p.avg.rate)} pts/hr`,
-  `to last until reset you can spend ${f1(p.canSpend)} pts/hr · ` +
-    (p.pace.outAt !== null ? `runs out ${at(p.pace.outAt, timeZone)}` : `lasts to reset, ends ~${Math.round(p.pace.atReset)}%`),
+  `used ${Math.round(p.now)}% · pace ${f1(p.pace.rate)} pts/hr (${p.window} h) · avg ${f1(p.avg.rate)}`,
+  `can spend ${f1(p.canSpend)} pts/hr · ` +
+    (p.pace.outAt !== null ? `runs out ${at(p.pace.outAt, timeZone)}` : `lasts, ends ~${Math.round(p.pace.atReset)}%`),
 ]
 export const summary = (p: Projection, timeZone?: string) => readouts(p, timeZone).join(' · ')
 
@@ -139,29 +139,43 @@ export function span(w: Week, nowMs: number, range: BurnRange): [number, number]
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
-/** The chart: actual, both projections, the 100% limit, the hourly pts/hr strip with the can-spend line, and an
- * invisible hit rect per hour carrying a <title> and a :hover guide line. */
+/** The chart's frame, sized for a narrow side pane (it scales to the slot's width): viewBox width and height, plot
+ * left and right edges, the legend row, plot top and bottom, the pts/hr strip, the font size. */
+export const BOX = { W: 400, Ht: 300, L: 36, R: 8, legend: 14, T: 34, cB: 196, bT: 210, bB: 268, font: 12 } as const
+/** Rough text width at the chart's font size (system-ui averages ~0.56 em), so a hover label's box fits its text. */
+export const textWidth = (s: string) => Math.ceil(s.length * BOX.font * 0.56)
+
+/** The hover readout's box for a guide at `gx`: right of the guide, flipped left of it near the right edge, kept
+ * inside the viewBox. */
+export function labelBox(gx: number, text: string): { x: number; w: number } {
+  const w = textWidth(text) + 12
+  const x = gx + 6 + w <= BOX.W - 1 ? gx + 6 : gx - 6 - w
+  return { x: Math.round(Math.max(1, Math.min(x, BOX.W - 1 - w))), w }
+}
+
+/** The chart: a legend row, actual, both projections, the 100% limit, the hourly pts/hr strip with the can-spend
+ * line, and one hit rect per hour whose hidden readout (label, guide line, dot on the line) shows on :hover. */
 export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, range: BurnRange = 'week'): string {
-  const [W, L, R, T] = [640, 40, 16, 14]
-  const [cB, bT, bB, Ht] = [176, 188, 238, 256] // chart bottom, bar strip top and bottom, height (x labels under)
+  const { W, Ht, L, R, legend, T, cB, bT, bB, font } = BOX
   const [x0, x1] = span(w, nowMs, range)
   const yMax = Math.max(100, ...w.points.map(q => q.week)) * 1.08
   const xn = (t: number) => L + ((t - x0) / (x1 - x0)) * (W - L - R)
   const x = (t: number) => xn(t).toFixed(1)
-  const y = (v: number) => (T + (1 - v / yMax) * (cB - T)).toFixed(1)
+  const yn = (v: number) => T + (1 - v / yMax) * (cB - T)
+  const y = (v: number) => yn(v).toFixed(1)
   const hours = hourly(w, nowMs)
   const g: string[] = [
-    `<style>.h .g{opacity:0}.h:hover .g{opacity:.7}.h:hover .b{opacity:.25}</style>`,
+    `<style>.h .r{visibility:hidden;pointer-events:none}.h:hover .r{visibility:visible}</style>`,
     `<defs><clipPath id="pa"><rect x="${L}" y="0" width="${W - L - R}" height="${Ht}"/></clipPath></defs>`,
   ]
   for (const v of [0, 50, 100])
     g.push(`<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? ACCENT : GREY}" stroke-opacity="${v === 100 ? 0.55 : 0.25}" stroke-width="1"/>`,
-      `<text x="${L - 6}" y="${y(v)}" dy="4" text-anchor="end">${v}%</text>`)
+      `<text x="${L - 5}" y="${y(v)}" dy="4" text-anchor="end">${v}%</text>`)
   if (range === 'week')
-    for (let d = 0; d < 7; d++) g.push(`<text x="${x(w.start + (d + 0.5) * 24 * H)}" y="${Ht - 4}" text-anchor="middle">${fmt(w.start + d * 24 * H, { weekday: 'short' }, timeZone)}</text>`)
+    for (let d = 0; d < 7; d++) g.push(`<text x="${x(w.start + (d + 0.5) * 24 * H)}" y="${Ht - 6}" text-anchor="middle">${fmt(w.start + d * 24 * H, { weekday: 'short' }, timeZone)}</text>`)
   else
     for (let t = Math.ceil(x0 / (12 * H)) * 12 * H; t <= x1; t += 12 * H)
-      if (xn(t) > L + 20 && xn(t) < W - R - 20) g.push(`<text x="${x(t)}" y="${Ht - 4}" text-anchor="middle">${at(t, timeZone)}</text>`)
+      if (xn(t) > L + 24 && xn(t) < W - R - 24) g.push(`<text x="${x(t)}" y="${Ht - 6}" text-anchor="middle">${at(t, timeZone)}</text>`)
   const c: string[] = [] // clipped to the plot area
   c.push(`<line x1="${x(w.start)}" y1="${y(0)}" x2="${x(w.reset)}" y2="${y(100)}" stroke="${GREY}" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="1 3"/>`)
   const shown = w.points.filter((q, i, a) => q.t >= x0 || (a[i + 1]?.t ?? Infinity) >= x0)
@@ -176,38 +190,46 @@ export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, 
   c.push(`<line x1="${x(now)}" y1="${y(p.now)}" x2="${x(eT)}" y2="${y(eV)}" stroke="${ACCENT}" stroke-width="1.5" stroke-dasharray="5 4"/>`)
   if (eT <= x1) {
     const label = p.pace.outAt !== null ? `out ${at(p.pace.outAt, timeZone)}` : `ends ~${Math.round(p.pace.atReset)}%`
-    const anchor = xn(eT) > W - 120 ? 'end' : 'start'
+    const anchor = xn(eT) > W - 90 ? 'end' : 'start'
     c.push(`<circle cx="${x(eT)}" cy="${y(eV)}" r="3.5" fill="${ACCENT}"/>`,
-      `<text x="${x(eT)}" y="${y(eV)}" dx="${anchor === 'end' ? -6 : 6}" dy="-6" text-anchor="${anchor}" fill="${ACCENT}">${label}</text>`)
+      `<text x="${x(eT)}" y="${y(eV)}" dx="${anchor === 'end' ? -6 : 6}" dy="-7" text-anchor="${anchor}" fill="${ACCENT}">${label}</text>`)
   }
   // the pts/hr strip: one bar per hour, scaled so the can-spend line and the tallest bar both fit
   const bMax = Math.max(0.5, p.canSpend * 1.5, ...hours.map(q => q.gain))
   const by = (v: number) => (bB - (v / bMax) * (bB - bT)).toFixed(1)
-  const bw = Math.max(1, (W - L - R) / ((x1 - x0) / H) - 1).toFixed(1)
+  const bw = Math.max(1, (W - L - R) / ((x1 - x0) / H) - 0.6).toFixed(1)
   const inView = hours.filter(q => q.t + H > x0 && q.t < x1)
   for (const q of inView) if (q.gain > 0) c.push(`<rect x="${x(q.t)}" y="${by(q.gain)}" width="${bw}" height="${(Number(by(0)) - Number(by(q.gain))).toFixed(1)}" fill="${ACCENT}" fill-opacity="0.75"/>`)
   c.push(`<line x1="${L}" x2="${W - R}" y1="${bB}" y2="${bB}" stroke="${GREY}" stroke-opacity="0.35" stroke-width="1"/>`,
     `<line x1="${L}" x2="${W - R}" y1="${by(p.canSpend)}" y2="${by(p.canSpend)}" stroke="${GREY}" stroke-opacity="0.6" stroke-width="1" stroke-dasharray="2 3"/>`)
   g.push(`<g clip-path="url(#pa)">${c.join('')}</g>`)
-  g.push(`<text x="${L - 6}" y="${bT + 4}" text-anchor="end">pts/hr</text>`,
-    `<text x="${W - R}" y="${by(p.canSpend)}" dy="-3" text-anchor="end">can spend ${f1(p.canSpend)}/h</text>`)
-  // legend, top left inside the plot
+  g.push(`<text x="${L - 5}" y="${bT + 4}" text-anchor="end">/hr</text>`,
+    `<text x="${W - R}" y="${by(p.canSpend)}" dy="-4" text-anchor="end">can spend ${f1(p.canSpend)}/h</text>`)
+  // legend: its own row above the plot
   const lg = (dx: number, color: string, dash: string, text: string) =>
-    `<line x1="${L + dx}" x2="${L + dx + 16}" y1="${T + 4}" y2="${T + 4}" stroke="${color}" stroke-width="1.5"${dash ? ` stroke-dasharray="${dash}"` : ''}/><text x="${L + dx + 20}" y="${T + 8}">${text}</text>`
-  g.push(lg(8, ACCENT, '', 'actual'), lg(70, GREY, '4 3', 'week avg'), lg(148, ACCENT, '4 3', `last ${p.window} h pace`))
-  // hover: one invisible hit rect per hour over chart and strip, a guide line shown on :hover, a <title> tooltip
+    `<line x1="${L + dx}" x2="${L + dx + 16}" y1="${legend - 4}" y2="${legend - 4}" stroke="${color}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/><text x="${L + dx + 20}" y="${legend}">${text}</text>`
+  g.push(lg(0, ACCENT, '', 'actual'), lg(68, GREY, '4 3', 'week avg'), lg(152, ACCENT, '4 3', `last ${p.window} h pace`))
+  // hover: one hit rect per hour (adjacent, never overlapping) over chart and strip; its readout is hidden until
+  // :hover: a guide line, a dot on the line (actual, or the pace projection ahead of now) and a label at the top
   const byT = new Map(hours.map(q => [q.t, q]))
   for (let t = Math.max(w.start, Math.floor((x0 - w.start) / H) * H + w.start); t < x1; t += H) {
     const q = byT.get(t)
-    const tip = q
-      ? `${at(t, timeZone)} · ${Math.round(q.pct)}% · +${f1(q.gain)} pts/hr`
+    const ahead = Math.min(p.now + p.pace.rate * ((t + H - nowMs) / H), p.pace.outAt !== null ? 100 : Infinity)
+    const [tip, v]: [string, number | undefined] = q
+      ? [`${at(t, timeZone)} · ${Math.round(q.pct)}% · +${f1(q.gain)}/h`, q.pct]
       : t >= nowMs
-        ? `${at(t, timeZone)} · ~${Math.round(Math.min(p.now + p.pace.rate * ((t + H - nowMs) / H), 999))}% at last ${p.window} h pace`
-        : `${at(t, timeZone)} · no reading`
-    const gx = x(t + H / 2)
-    g.push(`<g class="h"><rect x="${x(t)}" y="${T}" width="${bw}" height="${bB - T}" fill="transparent"/><line class="g" x1="${gx}" x2="${gx}" y1="${T}" y2="${bB}" stroke="${GREY}" stroke-width="1"/><title>${esc(tip)}</title></g>`)
+        ? [`${at(t, timeZone)} · ~${Math.round(Math.min(ahead, 999))}% at pace`, ahead]
+        : [`${at(t, timeZone)} · no reading`, undefined]
+    const [ra, rb] = [Math.max(xn(t), L), Math.min(xn(t + H), W - R)]
+    const gx = (ra + rb) / 2
+    const lb = labelBox(gx, tip)
+    const dot = v !== undefined && yn(v) >= T ? `<circle cx="${gx.toFixed(1)}" cy="${y(v)}" r="3.5" fill="${ACCENT}" stroke="white" stroke-width="1.5"/>` : ''
+    g.push(`<g class="h"><rect x="${ra.toFixed(1)}" y="${T}" width="${(rb - ra).toFixed(1)}" height="${bB - T}" fill="transparent"/>` +
+      `<g class="r"><line x1="${gx.toFixed(1)}" x2="${gx.toFixed(1)}" y1="${T}" y2="${bB}" stroke="${GREY}" stroke-width="1"/>${dot}` +
+      `<rect x="${lb.x}" y="${T + 1}" width="${lb.w}" height="${font + 8}" rx="4" fill="#2b2b2b" fill-opacity="0.92"/>` +
+      `<text x="${lb.x + 6}" y="${T + font + 3}" fill="white">${esc(tip)}</text></g></g>`)
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}" font-family="system-ui, sans-serif" font-size="11" fill="${GREY}">${g.join('')}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Ht}" style="width:100%;height:auto;display:block" font-family="system-ui, sans-serif" font-size="${font}" fill="${GREY}">${g.join('')}</svg>`
 }
 
 /** The readouts, the chart and its range / pace-window buttons; the terminal (no Svg) gets the readouts alone.
@@ -241,12 +263,16 @@ export async function burnView($: EngineInterface, e: RenderInput<'Pane'>, isLog
     <Box flexDirection="column">
       {lines}
       <Svg source={chart(w, p, nowMs, undefined, o.range)} alt={`Weekly usage this week: ${l1} · ${l2}`} isInteractive />
-      <Box key="burn-picks" flexDirection="row" gap={1}>
-        <Text dimColor>range</Text>
-        {pick('range', 'week', 'Week')}
-        {pick('range', '48h', '48 h')}
-        <Text dimColor>  pace</Text>
-        {WINDOWS.map(n => pick('window', n, `${n} h`))}
+      <Box key="burn-picks" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1}>
+        <Box key="burn-range" flexDirection="row" gap={1}>
+          <Text dimColor>range</Text>
+          {pick('range', 'week', 'Week')}
+          {pick('range', '48h', '48 h')}
+        </Box>
+        <Box key="burn-window" flexDirection="row" gap={1}>
+          <Text dimColor>pace</Text>
+          {WINDOWS.map(n => pick('window', n, `${n} h`))}
+        </Box>
       </Box>
     </Box>
   )
