@@ -7,6 +7,7 @@ import type { AgentRun, Plan, PlanStage, PlanState, PlanStep, StepStatus } from 
 import { ribbonLines, stripCells, stripSvg as usageSvg, stripText as usageText, stripZones } from './strip'
 import type { TermCell } from './strip'
 import type { StripShow, Zone } from './strip'
+import { burnView } from '../burn-pace/burn'
 
 const TOOL = 'mcp__stool__plan_progress'
 const plans = atom({ plugin: 'stool', key: 'plans' } as const, [])
@@ -1512,6 +1513,9 @@ const STAYS = [10, 30, 60]
 let isAutoClose = false
 let isSpeedShown = true
 let doneStaysMs = 30_000
+// the Weekly burn chart in the settings window: shown on a press, redrawn each minute while shown
+let isBurnShown = false
+let burnTimer: { cancel(): void } | undefined
 // the opt-in parts (userConfig booleans, default off), switched from the settings window: key, title, what it does,
 // the group it sits in, and the /config fields it needs filled before it does anything (noted while they are empty)
 const PARTS: [string, string, string, string, string[]][] = [
@@ -1575,6 +1579,14 @@ async function setOption($: EngineInterface, field: string, value: boolean | num
   }
 }
 
+// a reading the usage-pace mod logs shows within the minute
+async function showBurn($: EngineInterface, isOn: boolean) {
+  isBurnShown = isOn
+  burnTimer?.cancel()
+  burnTimer = isOn ? $.clock.every(60_000, () => void update($, tick, n => n + 1)) : undefined
+  await update($, tick, n => n + 1)
+}
+
 async function openSettings($: EngineInterface) {
   if (!aboutVersion)
     aboutVersion = await $.fs
@@ -1609,6 +1621,12 @@ export const register: Register = (on, options) => {
   const edits = new Map<string, { text: string; saved: string; error: string; pending?: Promise<void>; commit: () => Promise<void> }>()
   let editSaves = Promise.resolve()
   let focusedEdit: string | undefined
+  on('ui.close', { id: SETTINGS }, async ($, e, next) => {
+    burnTimer?.cancel()
+    burnTimer = undefined
+    isBurnShown = false
+    return next(e)
+  })
   on('ui.focus', { component: 'Pane', requestId: SETTINGS }, async ($, e, next) => {
     const key = e.plugin === 'stool' ? e.element : undefined
     if (focusedEdit && focusedEdit !== key) await edits.get(focusedEdit)?.commit()
@@ -2052,6 +2070,11 @@ export const register: Register = (on, options) => {
         const note = partsOn[k] === true && missing.length > 0 ? `${about} Needs ${missing.join(', ')} set in /config.` : about
         return row(k, title, note, sw(k, partsOn[k] === true, () => setOption($, k, partsOn[k] !== true)))
       })
+    const burn = isBurnShown ? (
+      <Box key="burn-chart" marginTop={1}>
+        {await burnView($, e, partsOn.usageLog === true)}
+      </Box>
+    ) : null
     return (
       <Box flexDirection="column">
         <Box key="card-Right now" flexDirection="column" backgroundColor="#2A2927" paddingX={1} paddingY={1}>
@@ -2099,7 +2122,18 @@ export const register: Register = (on, options) => {
           row('speed', 'Tokens per second', `Shows the ${speedLabel(s).replaceAll(FIGURE_SPACE, '')} figure: the main conversation's average over the last minute, subagents left out.`, sw(SPEED_SHOWN, isSpeedShown, () => setChoice($, SPEED_SHOWN, !isSpeedShown))),
         )}
         {card('Agents', 'off until switched on; patterns and names are in /config', ...part('Agents'))}
-        {card('Usage ledger', 'for the usage_since tool; off until switched on', ...part('Usage'))}
+        {card(
+          'Usage ledger',
+          'for the usage_since tool; off until switched on',
+          ...part('Usage'),
+          row(
+            'burn',
+            'Weekly burn',
+            "This week's weekly % against an even pace, and the last 24 h's pace carried to the reset. Reads the meter readings log.",
+            <Button key="burn" {...(isBurnShown ? { variant: 'primary' as const } : { plain: true })} label={isBurnShown ? 'Hide' : 'Show'} onPress={() => showBurn($, !isBurnShown)} />,
+          ),
+          burn,
+        )}
         {card(
           'Restarts',
           'how and when the session restarts, and reviews every Nth restart; Enter or blur saves fields',
