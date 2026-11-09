@@ -37,12 +37,28 @@ The generic parts are on as soon as you install it. The guards that carry projec
 
 ## Install
 
+Inside Claude Code (desktop app or terminal):
+
 ```
 /plugin marketplace add s66lem/stool
-/plugin install stool --marketplace s66lem/stool
+/plugin install stool@stool
 ```
 
-Answer `y` to add the marketplace, pick a scope, then set the options (every one has a default). Needs Claude Code 2.1.275 or later. The options live in `/config` under the plugin's name and can also be edited in `settings.json` under `pluginConfigs`.
+Or from a shell:
+
+```
+claude plugin marketplace add s66lem/stool
+claude plugin install stool@stool
+```
+
+This installs the version on `main` (2.18.1, the one in the badge above); `claude plugin list` shows what you have. To move an older install up to it:
+
+```
+claude plugin marketplace update stool
+claude plugin update stool@stool
+```
+
+A running session keeps the version it started with, so restart Claude Code afterwards. Pick a scope when asked, then set the options (every one has a default). Needs Claude Code 2.1.275 or later. The options live in `/config` under the plugin's name and can also be edited in `settings.json` under `pluginConfigs`.
 
 ## Parts
 
@@ -132,22 +148,21 @@ The settings window (`/plan-progress-settings`, or the gear in the footer) shows
 | `mcp__stool__list_sessions` | List the sessions stool started on this machine, including completed/stopped sessions. |
 | `mcp__stool__stop_session` | Stop a stool-started session by `session_id`, including its process tree; keep its transcript and logs. |
 
-### Independent sessions (start-session branch)
+### Independent sessions
 
 Windows, macOS and Linux need Node.js and Claude Code on PATH (`node` and
 `claude.exe` on Windows, `claude` elsewhere). Sessions run headless with normal
 Claude permissions and a fresh context; permission-gated work can be denied until
 you resume interactively. The tools never enable permission bypass.
 
-To try this branch without changing the installed plugin:
+These tools ship in the normal install. To run a checkout without changing the installed plugin:
 
 ```powershell
-git clone --branch start-session https://github.com/s66lem/stool.git stool-start-session
-claude --plugin-dir ./stool-start-session
+git clone https://github.com/s66lem/stool.git
+claude --plugin-dir ./stool
 ```
 
-If this checkout is already on `start-session`, use `claude --plugin-dir .`.
-Start the orchestrator this way on each school machine. It can then call:
+The orchestrator can then call:
 
 ```json
 {"prompt":"Read the handoff and work on the assigned task.","cwd":"C:/work/project","model":"sonnet","config_dir":"C:/accounts/school","name":"school seat"}
