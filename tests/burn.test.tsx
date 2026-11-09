@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { at, BOX, chart, currentWeek, downsample, hourly, labelBox, project, readouts, span, summary } from '../hooks/burn-pace/burn'
+import { at, BOX, chart, currentWeek, SCALE, downsample, hourly, labelBox, project, readouts, span, summary } from '../hooks/burn-pace/burn'
 
 const H = 3600_000
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6
@@ -100,15 +100,14 @@ const groups = (svg: string) =>
     return { hit: n[0]!, label: n[1]! }
   })
 
-test('narrow-pane svg: viewBox only (no root width or height), no <title>, no dimming, one readout per hour', () => {
+test('narrow-pane svg: a fixed drawn size (the frame takes its height from it), no <title>, no dimming, one readout per hour', () => {
   const w = currentWeek(log(fast))!
   for (const range of ['week', '48h'] as const) {
     const svg = chart(w, project(w, NOW), NOW, 'UTC', range)
     const root = svg.slice(0, svg.indexOf('>') + 1)
     expect(root).toContain(`viewBox="0 0 ${BOX.W} ${BOX.Ht}"`)
-    expect(root).toContain('width:100%')
-    expect(/\swidth="/.test(root)).toBe(false)
-    expect(/\sheight="/.test(root)).toBe(false)
+    expect(root).toContain(`width="${Math.round(BOX.W * SCALE)}"`)
+    expect(root).toContain(`height="${Math.round(BOX.Ht * SCALE)}"`)
     expect(root).toContain('font-size="12"')
     expect(svg).not.toContain('<title')
     expect(svg).not.toContain('opacity:')
@@ -130,7 +129,7 @@ test('narrow-pane svg: viewBox only (no root width or height), no <title>, no di
     expect(gs[0]!.label[0]).toBeGreaterThan(gs[0]!.hit[0])
   }
   // the hovered hour's dot sits on the actual line: Mon 6pm (h 95) at 64%
-  expect(chart(w, project(w, NOW), NOW, 'UTC')).toMatch(/<circle cx="[\d.]+" cy="[\d.]+" r="3.5" fill="#d97757" stroke="white"/)
+  expect(chart(w, project(w, NOW), NOW, 'UTC')).toMatch(/<circle cx="[\d.]+" cy="[\d.]+" r="3.5" fill="#5fbf9f" stroke="white"/)
 })
 
 test('label box: right of the guide, flipped left near the right edge, clamped inside the viewBox', () => {

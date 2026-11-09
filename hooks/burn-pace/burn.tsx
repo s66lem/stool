@@ -12,8 +12,16 @@ import type { BurnRange, BurnWindow } from '../../types'
 const H = 3600_000
 const WEEK = 168 * H
 const MAX_POINTS = 300
-const ACCENT = '#d97757'
-const GREY = '#8a8a8a'
+// colours of the approved mockup's dark theme: actual, last-N-h pace, week average, even pace, the 100% limit, grid, text
+const USED = '#5fbf9f'
+const RECENT = '#f08a4b'
+const AVG = '#7aa7e8'
+const PACE = '#6f7a75'
+const LIMIT = '#f0555e'
+const GRID = '#3a423f'
+const GREY = '#93a09a'
+/** The drawn size in CSS px: the viewBox scaled up so the side pane's width is filled and the frame gets a height. */
+export const SCALE = 1.15
 export const WINDOWS: BurnWindow[] = [1, 6, 24]
 export const RANGES: BurnRange[] = ['week', '48h']
 
@@ -169,7 +177,7 @@ export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, 
     `<defs><clipPath id="pa"><rect x="${L}" y="0" width="${W - L - R}" height="${Ht}"/></clipPath></defs>`,
   ]
   for (const v of [0, 50, 100])
-    g.push(`<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? ACCENT : GREY}" stroke-opacity="${v === 100 ? 0.55 : 0.25}" stroke-width="1"/>`,
+    g.push(`<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? LIMIT : GRID}" stroke-opacity="${v === 100 ? 0.8 : 1}" stroke-width="1"/>`,
       `<text x="${L - 5}" y="${y(v)}" dy="4" text-anchor="end">${v}%</text>`)
   if (range === 'week')
     for (let d = 0; d < 7; d++) g.push(`<text x="${x(w.start + (d + 0.5) * 24 * H)}" y="${Ht - 6}" text-anchor="middle">${fmt(w.start + d * 24 * H, { weekday: 'short' }, timeZone)}</text>`)
@@ -177,29 +185,29 @@ export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, 
     for (let t = Math.ceil(x0 / (12 * H)) * 12 * H; t <= x1; t += 12 * H)
       if (xn(t) > L + 24 && xn(t) < W - R - 24) g.push(`<text x="${x(t)}" y="${Ht - 6}" text-anchor="middle">${at(t, timeZone)}</text>`)
   const c: string[] = [] // clipped to the plot area
-  c.push(`<line x1="${x(w.start)}" y1="${y(0)}" x2="${x(w.reset)}" y2="${y(100)}" stroke="${GREY}" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="1 3"/>`)
+  c.push(`<line x1="${x(w.start)}" y1="${y(0)}" x2="${x(w.reset)}" y2="${y(100)}" stroke="${PACE}" stroke-width="1" stroke-dasharray="1 3"/>`)
   const shown = w.points.filter((q, i, a) => q.t >= x0 || (a[i + 1]?.t ?? Infinity) >= x0)
   const pts = downsample(shown)
-  if (pts.length) c.push(`<polyline fill="none" stroke="${ACCENT}" stroke-width="2" stroke-linejoin="round" points="${pts.map(q => `${x(q.t)},${y(q.week)}`).join(' ')}"/>`)
+  if (pts.length) c.push(`<polyline fill="none" stroke="${USED}" stroke-width="2.5" stroke-linejoin="round" points="${pts.map(q => `${x(q.t)},${y(q.week)}`).join(' ')}"/>`)
   const now = Math.min(Math.max(nowMs, w.start), w.reset)
   c.push(`<line x1="${x(now)}" x2="${x(now)}" y1="${T}" y2="${bB}" stroke="${GREY}" stroke-opacity="0.3" stroke-width="1"/>`)
   const end = (r: Run): [number, number] => (r.outAt !== null ? [r.outAt, 100] : [w.reset, r.atReset])
   const [aT, aV] = end(p.avg)
-  c.push(`<line x1="${x(now)}" y1="${y(p.now)}" x2="${x(aT)}" y2="${y(aV)}" stroke="${GREY}" stroke-width="1.5" stroke-dasharray="5 4"/>`)
+  c.push(`<line x1="${x(now)}" y1="${y(p.now)}" x2="${x(aT)}" y2="${y(aV)}" stroke="${AVG}" stroke-width="1.5" stroke-dasharray="5 4"/>`)
   const [eT, eV] = end(p.pace)
-  c.push(`<line x1="${x(now)}" y1="${y(p.now)}" x2="${x(eT)}" y2="${y(eV)}" stroke="${ACCENT}" stroke-width="1.5" stroke-dasharray="5 4"/>`)
+  c.push(`<line x1="${x(now)}" y1="${y(p.now)}" x2="${x(eT)}" y2="${y(eV)}" stroke="${RECENT}" stroke-width="1.5" stroke-dasharray="5 4"/>`)
   if (eT <= x1) {
     const label = p.pace.outAt !== null ? `out ${at(p.pace.outAt, timeZone)}` : `ends ~${Math.round(p.pace.atReset)}%`
     const anchor = xn(eT) > W - 90 ? 'end' : 'start'
-    c.push(`<circle cx="${x(eT)}" cy="${y(eV)}" r="3.5" fill="${ACCENT}"/>`,
-      `<text x="${x(eT)}" y="${y(eV)}" dx="${anchor === 'end' ? -6 : 6}" dy="-7" text-anchor="${anchor}" fill="${ACCENT}">${label}</text>`)
+    c.push(`<circle cx="${x(eT)}" cy="${y(eV)}" r="3.5" fill="${LIMIT}"/>`,
+      `<text x="${x(eT)}" y="${y(eV)}" dx="${anchor === 'end' ? -6 : 6}" dy="-7" text-anchor="${anchor}" fill="${LIMIT}">${label}</text>`)
   }
   // the pts/hr strip: one bar per hour, scaled so the can-spend line and the tallest bar both fit
   const bMax = Math.max(0.5, p.canSpend * 1.5, ...hours.map(q => q.gain))
   const by = (v: number) => (bB - (v / bMax) * (bB - bT)).toFixed(1)
   const bw = Math.max(1, (W - L - R) / ((x1 - x0) / H) - 0.6).toFixed(1)
   const inView = hours.filter(q => q.t + H > x0 && q.t < x1)
-  for (const q of inView) if (q.gain > 0) c.push(`<rect x="${x(q.t)}" y="${by(q.gain)}" width="${bw}" height="${(Number(by(0)) - Number(by(q.gain))).toFixed(1)}" fill="${ACCENT}" fill-opacity="0.75"/>`)
+  for (const q of inView) if (q.gain > 0) c.push(`<rect x="${x(q.t)}" y="${by(q.gain)}" width="${bw}" height="${(Number(by(0)) - Number(by(q.gain))).toFixed(1)}" fill="${q.gain > p.canSpend ? RECENT : USED}" fill-opacity="0.85"/>`)
   c.push(`<line x1="${L}" x2="${W - R}" y1="${bB}" y2="${bB}" stroke="${GREY}" stroke-opacity="0.35" stroke-width="1"/>`,
     `<line x1="${L}" x2="${W - R}" y1="${by(p.canSpend)}" y2="${by(p.canSpend)}" stroke="${GREY}" stroke-opacity="0.6" stroke-width="1" stroke-dasharray="2 3"/>`)
   g.push(`<g clip-path="url(#pa)">${c.join('')}</g>`)
@@ -208,7 +216,7 @@ export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, 
   // legend: its own row above the plot
   const lg = (dx: number, color: string, dash: string, text: string) =>
     `<line x1="${L + dx}" x2="${L + dx + 16}" y1="${legend - 4}" y2="${legend - 4}" stroke="${color}" stroke-width="2"${dash ? ` stroke-dasharray="${dash}"` : ''}/><text x="${L + dx + 20}" y="${legend}">${text}</text>`
-  g.push(lg(0, ACCENT, '', 'actual'), lg(68, GREY, '4 3', 'week avg'), lg(152, ACCENT, '4 3', `last ${p.window} h pace`))
+  g.push(lg(0, USED, '', 'actual'), lg(68, AVG, '4 3', 'week avg'), lg(152, RECENT, '4 3', `last ${p.window} h pace`))
   // hover: one hit rect per hour (adjacent, never overlapping) over chart and strip; its readout is hidden until
   // :hover: a guide line, a dot on the line (actual, or the pace projection ahead of now) and a label at the top
   const byT = new Map(hours.map(q => [q.t, q]))
@@ -223,13 +231,13 @@ export function chart(w: Week, p: Projection, nowMs: number, timeZone?: string, 
     const [ra, rb] = [Math.max(xn(t), L), Math.min(xn(t + H), W - R)]
     const gx = (ra + rb) / 2
     const lb = labelBox(gx, tip)
-    const dot = v !== undefined && yn(v) >= T ? `<circle cx="${gx.toFixed(1)}" cy="${y(v)}" r="3.5" fill="${ACCENT}" stroke="white" stroke-width="1.5"/>` : ''
+    const dot = v !== undefined && yn(v) >= T ? `<circle cx="${gx.toFixed(1)}" cy="${y(v)}" r="3.5" fill="${USED}" stroke="white" stroke-width="1.5"/>` : ''
     g.push(`<g class="h"><rect x="${ra.toFixed(1)}" y="${T}" width="${(rb - ra).toFixed(1)}" height="${bB - T}" fill="transparent"/>` +
       `<g class="r"><line x1="${gx.toFixed(1)}" x2="${gx.toFixed(1)}" y1="${T}" y2="${bB}" stroke="${GREY}" stroke-width="1"/>${dot}` +
       `<rect x="${lb.x}" y="${T + 1}" width="${lb.w}" height="${font + 8}" rx="4" fill="#2b2b2b" fill-opacity="0.92"/>` +
       `<text x="${lb.x + 6}" y="${T + font + 3}" fill="white">${esc(tip)}</text></g></g>`)
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Ht}" style="width:100%;height:auto;display:block" font-family="system-ui, sans-serif" font-size="${font}" fill="${GREY}">${g.join('')}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Ht}" width="${Math.round(W * SCALE)}" height="${Math.round(Ht * SCALE)}" style="display:block" font-family="system-ui, sans-serif" font-size="${font}" fill="${GREY}">${g.join('')}</svg>`
 }
 
 /** The readouts, the chart and its range / pace-window buttons; the terminal (no Svg) gets the readouts alone.
@@ -262,7 +270,7 @@ export async function burnView($: EngineInterface, e: RenderInput<'Pane'>, isLog
   return (
     <Box flexDirection="column">
       {lines}
-      <Svg source={chart(w, p, nowMs, undefined, o.range)} alt={`Weekly usage this week: ${l1} · ${l2}`} isInteractive />
+      <Svg source={chart(w, p, nowMs, undefined, o.range)} alt={`Weekly usage this week: ${l1} · ${l2}`} width={Math.round(BOX.W * SCALE)} height={Math.round(BOX.Ht * SCALE)} isInteractive />
       <Box key="burn-picks" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1}>
         <Box key="burn-range" flexDirection="row" gap={1}>
           <Text dimColor>range</Text>
