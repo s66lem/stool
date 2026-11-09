@@ -11,6 +11,7 @@ import { register as restartClock } from './restart-clock/register'
 import { register as planProgress } from './plan-progress/register'
 import { register as captureGuard } from './capture-guard/register'
 import { AGENT_CAP_TOOL, register as usagePace } from './usage-pace/register'
+import { register as burnPace } from './burn-pace/register'
 import { inScope, roots } from './config'
 import { SESSION_TOOLS, register as startSession } from './start-session/register'
 
@@ -40,6 +41,7 @@ async function offerMissing($: EngineInterface, projectRoots: string[], isKeepWa
 export const register: Register = (on, options) => {
   planProgress(on, options)
   usagePace(on, options)
+  burnPace(on, options)
   freshRestart(on, options)
   startSession(on, options)
   keepWarm(on, options)
