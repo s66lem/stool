@@ -61,6 +61,10 @@ export type KeepWarmStrip = {
 // capture-guard's strip: free RAM and open windows of the watched app
 export type CaptureStrip = { ramFreeGB: number; appWindows: number }
 
+// the Weekly burn chart's x range and pace window (hours)
+export type BurnRange = 'week' | '48h'
+export type BurnWindow = 1 | 6 | 24
+
 declare module 'claude-code' {
   interface PluginState {
     stool: {
@@ -78,6 +82,8 @@ declare module 'claude-code' {
       speed: { rate: number | null; isLive: boolean }
       // the settings window's choices, rewritten at every change so a reload of the mod takes them back
       prefs: { autoclose: boolean; speedShown: boolean; rev: number } | null
+      // the Weekly burn chart's choices (burn-pace): range and pace window, switched by its buttons
+      burn: { range: BurnRange; window: BurnWindow }
     }
   }
 }

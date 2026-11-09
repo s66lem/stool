@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { at, chart, currentWeek, downsample, project, summary } from '../hooks/burn-pace/burn'
+import { at, chart, currentWeek, downsample, hourly, project, readouts, span, summary } from '../hooks/burn-pace/burn'
 
 const H = 3600_000
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6
@@ -24,28 +24,92 @@ test('reads only the current week', () => {
   expect(currentWeek('')).toBe(undefined)
 })
 
-test('pace is the last 24 h; it ends under 100% when slow', () => {
-  // flat 28% until 24 h ago, then +12 pts over the last 24 h: 40% now, +36 more in 72 h = 76%
-  const w = currentWeek(log(h => (h <= 72 ? 28 : 28 + (h - 72) / 2)))!
+const LINE1 = 'used 64% · pace last 24 h 1.0 pts/hr · week avg 0.7 pts/hr'
+const LINE2 = 'to last until reset you can spend 0.5 pts/hr · runs out Wed 7am'
+const slow = (h: number) => (h <= 72 ? 28 : 28 + (h - 72) / 2) // 40% now, +12 pts over the last 24 h
+const fast = (h: number) => (h <= 72 ? 40 : 40 + (h - 72)) // 64% now, +24 pts over the last 24 h
+// 40% to h72, +0.5/h to h90 (49%), then +2/h: 61% now; the last 6 h run four times the 24 h pace's second half
+const late = (h: number) => (h <= 72 ? 40 : h <= 90 ? 40 + (h - 72) * 0.5 : 49 + (h - 90) * 2)
+const hits = (svg: string) => svg.split('<g class="h">').length - 1
+
+test('pace in pts/hr over the last 24 h, the week average, the can-spend rate; slow ends under 100%', () => {
+  const w = currentWeek(log(slow))!
   const p = project(w, NOW)
   expect(p.now).toBe(40)
-  expect(r6(p.per24h)).toBe(12)
-  expect(r6(p.atReset)).toBe(76)
-  expect(p.outAt).toBe(null)
-  expect(summary(p)).toBe('now 40% · last 24h +12.0 pts · projected 76% at reset')
-  expect(chart(w, p, NOW, 'UTC')).toContain('ends at 76%')
+  expect(p.window).toBe(24)
+  expect(r6(p.pace.rate)).toBe(0.5)
+  expect(r6(p.avg.rate)).toBe(r6(40 / 96))
+  expect(r6(p.canSpend)).toBe(r6(60 / 72))
+  expect(r6(p.pace.atReset)).toBe(76)
+  expect(p.pace.outAt).toBe(null)
+  expect(readouts(p, 'UTC')).toEqual([
+    'used 40% · pace last 24 h 0.5 pts/hr · week avg 0.4 pts/hr',
+    'to last until reset you can spend 0.8 pts/hr · lasts to reset, ends ~76%',
+  ])
+  expect(chart(w, p, NOW, 'UTC')).toContain('ends ~76%')
 })
 
-test('a fast pace crosses 100% before the reset, and says when', () => {
-  // +24 pts over the last 24 h from 40%: 64% now, the other 36 pts take 36 h
-  const w = currentWeek(log(h => (h <= 72 ? 40 : 40 + (h - 72))))!
+test('a fast pace crosses 100% before the reset, and says when; both projections drawn', () => {
+  const w = currentWeek(log(fast))!
   const p = project(w, NOW)
-  expect(r6(p.per24h)).toBe(24)
-  expect(r6(p.atReset)).toBe(136)
-  expect(r6(p.outAt!)).toBe(NOW + 36 * H)
+  expect(r6(p.pace.rate)).toBe(1)
+  expect(r6(p.pace.atReset)).toBe(136)
+  expect(r6(p.pace.outAt!)).toBe(NOW + 36 * H)
+  expect(r6(p.avg.outAt!)).toBe(NOW + 54 * H) // 36 pts left at 64/96 pts/hr
+  expect(r6(p.canSpend)).toBe(0.5)
   // NOW = Mon 11-09 19:00 UTC; +36 h = Wed 11-11 07:00 UTC
-  expect(at(p.outAt!, 'UTC')).toBe('Wed 7am')
-  expect(chart(w, p, NOW, 'UTC')).toContain('out Wed 7am')
+  expect(at(p.pace.outAt!, 'UTC')).toBe('Wed 7am')
+  expect(summary(p, 'UTC')).toBe(LINE1 + ' · ' + LINE2)
+  const svg = chart(w, p, NOW, 'UTC')
+  expect(svg).toContain('out Wed 7am')
+  expect(svg).toContain('week avg</text>')
+  expect(svg).toContain('last 24 h pace</text>')
+  expect(svg).toContain('can spend 0.5/h')
+})
+
+test('the pace window picks which pace the readout and projection use', () => {
+  const w = currentWeek(log(late))!
+  expect(r6(project(w, NOW, 24).pace.rate)).toBe(r6(21 / 24))
+  expect(r6(project(w, NOW, 1).pace.rate)).toBe(2)
+  const p = project(w, NOW, 6)
+  expect(r6(p.pace.rate)).toBe(2)
+  expect(r6(p.pace.outAt!)).toBe(NOW + 19.5 * H) // 39 pts at 2/h
+  expect(readouts(p, 'UTC')[0]).toBe('used 61% · pace last 6 h 2.0 pts/hr · week avg 0.6 pts/hr')
+  expect(readouts(p, 'UTC')[1]).toBe('to last until reset you can spend 0.5 pts/hr · runs out Tue 2:30pm')
+  expect(chart(w, p, NOW, 'UTC')).toContain('last 6 h pace</text>')
+})
+
+test('hourly bars: one per hour up to now, the points gained that hour, hover titles per hour', () => {
+  const w = currentWeek(log(fast))!
+  const hs = hourly(w, NOW)
+  expect(hs).toHaveLength(96)
+  expect(hs[0]).toEqual({ t: start, pct: 40, gain: 0 })
+  expect(hs.filter(q => q.gain === 1).map(q => (q.t - start) / H)).toEqual(Array.from({ length: 24 }, (_, i) => 72 + i))
+  expect(hs[95]).toEqual({ t: NOW - H, pct: 64, gain: 1 })
+  const svg = chart(w, project(w, NOW), NOW, 'UTC')
+  expect(hits(svg)).toBe(168)
+  expect(svg).toContain('<title>Mon 6pm · 64% · +1.0 pts/hr</title>')
+  expect(svg).toContain('<title>Mon 7pm · ~65% at last 24 h pace</title>')
+  expect(svg).toContain('.h:hover .g{opacity:.7}')
+})
+
+test('range: the week, or 48 h (36 h back, 12 h ahead) kept inside the week', () => {
+  const w = currentWeek(log(fast))!
+  expect(span(w, NOW, 'week')).toEqual([start, reset])
+  expect(span(w, NOW, '48h')).toEqual([NOW - 36 * H, NOW + 12 * H])
+  expect(span(w, start + 2 * H, '48h')).toEqual([start, start + 48 * H])
+  expect(span(w, reset - H, '48h')).toEqual([reset - 48 * H, reset])
+  const svg = chart(w, project(w, NOW), NOW, 'UTC', '48h')
+  expect(hits(svg)).toBe(48)
+  expect(svg).toContain('<title>Mon 6pm · 64% · +1.0 pts/hr</title>')
+})
+
+test('a dense week (a reading a minute) stays under the Svg cap', () => {
+  const rows = Array.from({ length: 168 * 60 }, (_, m) => JSON.stringify({ t: start + m * 60_000, week: 100 * (m / (168 * 60)) ** 1.3, weekResetsAt: RESET }))
+  const w = currentWeek(rows.join('\n'))!
+  const now = reset - 60_000
+  for (const range of ['week', '48h'] as const)
+    for (const win of [1, 6, 24] as const) expect(chart(w, project(w, now, win), now, 'UTC', range).length).toBeLessThan(131072)
 })
 
 test('downsamples to at most 300 points, keeping the last', () => {
@@ -64,12 +128,11 @@ const pane = (requestId: string, title: string) =>
     props: { title, isFocused: true, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 34 }, view: {} },
   }) as const
 const SETTINGS = pane('settings', 'Stool settings')
-const LINE = 'now 64% · last 24h +24.0 pts · projected 136% at reset'
 const ON = { options: { usageLog: true } }
 
 // a fast week's log at NOW, and what the settings window reads besides
 function seed(on: On) {
-  const text = log(h => (h <= 72 ? 40 : 40 + (h - 72)))
+  const text = log(fast)
   on('env.get', () => ({ value: 'C:/Users/me' }))
   on('fs.read', () => ({ value: text }))
   mock.clock(on, { now: NOW })
@@ -90,10 +153,13 @@ test('the settings window shows the burn chart on a press: one svg on desktop an
       expect(src.startsWith('<svg')).toBe(true)
       expect(src).toContain('<polyline')
       expect(src).toContain('out ')
+      expect(svgs[0]?.props.isInteractive).toBe(true)
+      expect(await ui.find({ type: 'Button', key: 'burn-window-6' })).toBeTruthy()
     }
-    expect((await ui.find({ type: 'Text', text: /projected 136%/ }))?.text).toBe(LINE)
+    expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
+    expect((await ui.find({ type: 'Text', text: /can spend/ }))?.text).toBe(LINE2.replace('Wed 7am', at(NOW + 36 * H))) // local time
     await ui.press({ key: 'burn' })
-    expect(await ui.find({ type: 'Text', text: /projected 136%/ })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: /^used 64%/ })).toBe(undefined)
     await ui.unmount()
   }
 })
@@ -104,8 +170,20 @@ test('/burn opens a pane with the same chart', ON, async ($, on) => {
   on('ui.open', () => ({ value: { isPlaced: true } }))
   expect((await $.command.run({ command: 'burn' } as never)).text).toBe('Weekly burn opened.')
   const ui = await $.ui.mount({ ...pane('burn-pace', 'Weekly burn'), surface: 'desktop' })
+  const svg = async () => String((await ui.findAll({ type: 'Svg' }))[0]?.props.source)
   expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1)
-  expect((await ui.find({ type: 'Text', text: /projected 136%/ }))?.text).toBe(LINE)
+  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
+  expect(hits(await svg())).toBe(168)
+  // the buttons switch the pace window (readout and projection) and the range, and the pane redraws
+  await ui.press({ key: 'burn-window-1' })
+  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe('used 64% · pace last 1 h 1.0 pts/hr · week avg 0.7 pts/hr')
+  expect(await svg()).toContain('last 1 h pace</text>')
+  await ui.press({ key: 'burn-range-48h' })
+  expect(hits(await svg())).toBe(48)
+  await ui.press({ key: 'burn-range-week' })
+  await ui.press({ key: 'burn-window-24' })
+  expect(hits(await svg())).toBe(168)
+  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
   await ui.unmount()
 })
 
