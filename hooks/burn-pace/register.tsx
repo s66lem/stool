@@ -1,40 +1,26 @@
-// burn-pace: /burn shows or hides a pane with the Weekly burn chart (the same chart the settings window shows)
-import type { Register, Timer } from 'claude-code'
+// burn-pace: /burn pops the Weekly burn chart out into its own small window (a page stool writes and keeps fresh);
+// the settings window shows the same chart in place and has a Pop out button doing the same
+import type { Register } from 'claude-code'
 
 import { flag } from '../config'
-import { burnView } from './burn'
-
-const PANE = 'burn-pace'
+import { popOut, refreshPage } from './popout'
 
 export const register: Register = (on, options) => {
-  let tick: Timer | undefined
-  const stop = () => {
-    tick?.cancel()
-    tick = undefined
-  }
-
   on('session.start', { cwd: /[^]*|a{51}/ }, async ($, e, next) => {
-    await $.command.register({ name: 'burn', description: 'Show or hide the weekly burn chart' })
+    await $.command.register({ name: 'burn', description: 'Open the weekly burn chart in its own window (/burn new: another window)' })
     return next(e)
   })
 
-  on('command.run', { command: 'burn' }, async $ => {
+  on('command.run', { command: 'burn' }, async ($, e) => {
     if (!flag(options, 'usageLog')) return { text: 'Weekly burn needs Log meter readings (usageLog) switched on in /config.' }
-    if ((await $.ui.panes()).some(p => p.id === PANE)) {
-      await $.ui.close({ id: PANE })
-      return { text: 'Weekly burn closed.' }
-    }
-    await $.ui.open({ id: PANE, title: 'Weekly burn' })
-    stop()
-    // redraw each minute while open: a reading usage-pace logged shows within a minute
-    tick = $.clock.every(60_000, () => $.ui.invalidate('ui.render'))
-    return { text: 'Weekly burn opened.' }
+    return { text: await popOut($, e.args.trim() === 'new') }
   })
 
-  on('ui.close', { id: PANE }, async ($, e, next) => {
-    stop()
-    return next(e)
+  // a meter reading logged during a turn shows in the window at its next reload, not up to a minute later
+  // (usage-pace stays free of an import, so its spec still runs alone)
+  on('turn.complete', { reason: /[^]*|a{52}/ }, async ($, e, next) => {
+    const out = await next(e)
+    if (flag(options, 'usageLog')) await refreshPage($)
+    return out
   })
-
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => burnView($, e, flag(options, 'usageLog')))
 }

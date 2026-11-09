@@ -8,6 +8,7 @@ import { ribbonLines, stripCells, stripSvg as usageSvg, stripText as usageText, 
 import type { TermCell } from './strip'
 import type { StripShow, Zone } from './strip'
 import { burnView } from '../burn-pace/burn'
+import { popOut } from '../burn-pace/popout'
 
 const TOOL = 'mcp__stool__plan_progress'
 const plans = atom({ plugin: 'stool', key: 'plans' } as const, [])
@@ -2129,8 +2130,16 @@ export const register: Register = (on, options) => {
           row(
             'burn',
             'Weekly burn',
-            "This week's weekly % against an even pace, and the last 24 h's pace carried to the reset. Reads the meter readings log.",
-            <Button key="burn" {...(isBurnShown ? { variant: 'primary' as const } : { plain: true })} label={isBurnShown ? 'Hide' : 'Show'} onPress={() => showBurn($, !isBurnShown)} />,
+            "This week's weekly % against an even pace, and the last 24 h's pace carried to the reset. Reads the meter readings log. Pop out opens it in its own window, as /burn does.",
+            <Box key="burn-buttons" flexDirection="row" gap={1}>
+              <Button key="burn" {...(isBurnShown ? { variant: 'primary' as const } : { plain: true })} label={isBurnShown ? 'Hide' : 'Show'} onPress={() => showBurn($, !isBurnShown)} />
+              <Button
+                key="burn-popout"
+                plain
+                label="Pop out"
+                onPress={async () => $.ui.toast(partsOn.usageLog === true ? await popOut($) : 'Weekly burn needs Log meter readings (usageLog) switched on.')}
+              />
+            </Box>,
           ),
           burn,
         )}

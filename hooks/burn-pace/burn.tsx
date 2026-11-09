@@ -1,4 +1,4 @@
-// the Weekly burn chart (the /burn pane and the settings window): this week's weekly-limit readings from the
+// the Weekly burn chart (the settings window in place, and the /burn pop-out window from the same math):
 // usage-pace log, a readouts row (used, pace in pts/hr, week average, what you can spend to last until the reset,
 // when it runs out), two projections (week average and the chosen pace window), the 100% limit, and an hourly
 // pts/hr bar strip under the chart, sized for a narrow side pane; hover shows each hour's readout, buttons switch the range and the pace window

@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { at, BOX, chart, currentWeek, downsample, hourly, labelBox, project, readouts, span, summary } from '../hooks/burn-pace/burn'
+import { fileUrl, openArgv, pageData, pageHtml } from '../hooks/burn-pace/popout'
 
 const H = 3600_000
 const r6 = (x: number) => Math.round(x * 1e6) / 1e6
@@ -206,6 +207,7 @@ test('the settings window shows the burn chart on a press: one svg on desktop an
       expect(src).toContain('out ')
       expect(svgs[0]?.props.isInteractive).toBe(true)
       expect(await ui.find({ type: 'Button', key: 'burn-window-6' })).toBeTruthy()
+      expect(await ui.find({ type: 'Button', key: 'burn-popout' })).toBeTruthy()
     }
     expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
     expect((await ui.find({ type: 'Text', text: /can spend/ }))?.text).toBe(LINE2.replace('Wed 7am', at(NOW + 36 * H))) // local time
@@ -215,27 +217,82 @@ test('the settings window shows the burn chart on a press: one svg on desktop an
   }
 })
 
-test('/burn opens a pane with the same chart', ON, async ($, on) => {
-  seed(on)
-  on('ui.panes', () => ({ value: [] }) as never)
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  expect((await $.command.run({ command: 'burn' } as never)).text).toBe('Weekly burn opened.')
-  const ui = await $.ui.mount({ ...pane('burn-pace', 'Weekly burn'), surface: 'desktop' })
-  const svg = async () => String((await ui.findAll({ type: 'Svg' }))[0]?.props.source)
-  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(1)
-  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
-  expect(hits(await svg())).toBe(168)
-  // the buttons switch the pace window (readout and projection) and the range, and the pane redraws
-  await ui.press({ key: 'burn-window-1' })
-  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe('used 64% · pace 1.0 pts/hr (1 h) · avg 0.7')
-  expect(await svg()).toContain('last 1 h pace</text>')
-  await ui.press({ key: 'burn-range-48h' })
-  expect(hits(await svg())).toBe(48)
-  await ui.press({ key: 'burn-range-week' })
-  await ui.press({ key: 'burn-window-24' })
-  expect(hits(await svg())).toBe(168)
-  expect((await ui.find({ type: 'Text', text: /^used 64%/ }))?.text).toBe(LINE1)
-  await ui.unmount()
+test('page data: the week, its readings and hours, one projection and readout pair per pace window', () => {
+  const w = currentWeek(log(fast))!
+  const d = pageData(w, NOW, 'UTC')
+  expect(d.generated).toBe(NOW)
+  expect([d.start, d.reset]).toEqual([start, reset])
+  expect(d.points).toHaveLength(97)
+  expect(d.points[96]).toEqual([NOW, 64])
+  expect(d.hours).toHaveLength(96)
+  expect(d.hours[80]).toEqual([start + 80 * H, 49, 1])
+  expect(Object.keys(d.proj).sort()).toEqual(['1', '24', '6'])
+  expect(d.proj['24']).toEqual(project(w, NOW, 24))
+  expect(d.lines['24']).toEqual(['used 64% · pace 1.0 pts/hr (24 h) · avg 0.7', 'can spend 0.5 pts/hr · runs out Wed 7am'])
+  expect(d.lines['1']?.[0]).toBe('used 64% · pace 1.0 pts/hr (1 h) · avg 0.7')
+  // the JSON round-trips (no Infinity / undefined lost)
+  expect(JSON.parse(JSON.stringify(d))).toEqual(d)
+})
+
+test('the page is self-contained: no external URL, script or stylesheet; the data embedded and safe to embed', () => {
+  const w = currentWeek(log(fast))!
+  const html = pageHtml(pageData(w, NOW, 'UTC'))
+  expect(html).not.toMatch(/https?:\/\//)
+  expect(html).not.toMatch(/\bsrc=|<link|@import|url\((?!#)/)
+  const json = html.split('<script id="burn-data" type="application/json">')[1]!.split('</script>')[0]!
+  expect(JSON.parse(json).lines['24'][1]).toBe('can spend 0.5 pts/hr · runs out Wed 7am')
+  expect(html).toContain('#1f1e1d')
+  expect(html).toContain('#d97757')
+  for (const k of ['data-v="week"', 'data-v="48h"', 'data-v="1"', 'data-v="6"', 'data-v="24"']) expect(html).toContain(k)
+  expect(html).toContain('location.reload()')
+  expect(html).toContain('localStorage')
+  // a '<' in the data cannot end the script early
+  expect(pageHtml({ ...pageData(w, NOW, 'UTC'), lines: { 24: ['</script><b>', ''] } } as never)).not.toContain('</script><b>')
+  expect(pageHtml(undefined)).toContain('No weekly readings logged yet.')
+})
+
+test('the open command line per platform', () => {
+  const url = fileUrl('C:\\Users\\me\\.claude\\stool\\burn.html')
+  expect(url).toBe('file:///C:/Users/me/.claude/stool/burn.html')
+  expect(fileUrl('/home/me/.claude/stool/burn.html')).toBe('file:///home/me/.claude/stool/burn.html')
+  expect(fileUrl('C:/Users/Jo Doe/burn.html')).toBe('file:///C:/Users/Jo%20Doe/burn.html')
+  const win = openArgv('win32', url)
+  expect(win.slice(0, 4)).toEqual(['powershell', '-NoProfile', '-NonInteractive', '-Command'])
+  expect(win[4]).toBe(
+    "try { Start-Process msedge -ArgumentList '--app=file:///C:/Users/me/.claude/stool/burn.html','--window-size=520,380' -ErrorAction Stop } catch { Start-Process 'file:///C:/Users/me/.claude/stool/burn.html' }",
+  )
+  expect(openArgv('win32', "file:///C:/it's.html")[4]).toContain("'--app=file:///C:/it''s.html'")
+  expect(openArgv('darwin', url)).toEqual(['open', url])
+  expect(openArgv('linux', url)).toEqual(['xdg-open', url])
+})
+
+test('/burn writes the page and opens one Edge app window; a second /burn says it is open and refreshes the file', ON, async ($, on) => {
+  const text = log(fast)
+  const env: Record<string, string> = { USERPROFILE: 'C:\\Users\\me', OS: 'Windows_NT' }
+  on('env.get', (_$, e) => ({ value: env[e.name] }))
+  on('fs.read', () => ({ value: text }))
+  mock.clock(on, { now: NOW })
+  const writes: string[] = []
+  on('fs.write', (_$, e) => {
+    writes.push(e.path.split(String.fromCharCode(92)).join('/'))
+    return { value: undefined }
+  })
+  const runs: string[][] = []
+  on('process.run', (_$, e) => {
+    runs.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '', stderr: '' } } as never
+  })
+  const burn = async (args = '') => String((await $.command.run({ command: 'burn', args } as never)).text)
+  expect(await burn()).toMatch(/^Weekly burn opened in its own window/)
+  expect(writes).toEqual(['C:/Users/me/.claude/stool/burn.html'])
+  expect(runs).toHaveLength(1)
+  expect(runs[0]?.[0]).toBe('powershell')
+  expect(runs[0]?.[4]).toContain("'--app=file:///C:/Users/me/.claude/stool/burn.html','--window-size=520,380'")
+  expect(await burn()).toMatch(/already open in its own window \(refreshed now\)\. Stool can't close that window/)
+  expect(writes).toHaveLength(2)
+  expect(runs).toHaveLength(1)
+  expect(await burn('new')).toMatch(/^Weekly burn opened/)
+  expect(runs).toHaveLength(2)
 })
 
 test('with usageLog off, /burn and the settings button say so in one line', { options: { usageLog: false } }, async ($, on) => {
