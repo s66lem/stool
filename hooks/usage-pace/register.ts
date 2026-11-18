@@ -1,5 +1,7 @@
 import type { EngineInterface, Register, SessionRateLimit, ToolSpec } from 'claude-code'
 
+import { attemptBound } from '../attempt-bound'
+
 import type { UsageStrip, UsageWindow } from '../../types'
 
 import { expand, flag } from '../config'
@@ -187,8 +189,7 @@ export const register: Register = (on, options) => {
   const samples: Sample[] = []
 
   on('session.start', { cwd: /[^]*|a{29}/ }, async ($, e, next) => {
-    await $.tool.register(AGENT_CAP_TOOL)
-
+    await attemptBound(() => $.tool.register(AGENT_CAP_TOOL), (ms) => $.clock.sleep(ms))
     return next(e)
   })
 

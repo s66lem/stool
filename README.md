@@ -77,7 +77,7 @@ A running session keeps the version it started with, so restart Claude Code afte
 | Lead guard (`lead-guard`) | no | Denies known slips of the main conversation (not subagents): `git add -A`, `cd` out of the project folder, shell writes to chosen doc paths, check scripts piped to `tail`, plus a nudge after repeated full-size image reads. |
 | Capture guard (`capture-guard`) | no | Circuit breaker on a slow screen-capture tool (stops after two failures in a row) and a strip value with free RAM and the count of the watched app's windows. Windows only for the strip. |
 
-Tools can go missing in a session that resumed after a reboot (their registration ran before the session was bound). At every prompt stool checks the model's tool list and offers again whichever of `agent_cap`, `restart_session`, `reload_plugins`, `usage_since`, `outcomes` and `keep_warm` is missing; a re-offered tool shows from the next prompt.
+`$.tool.register` (and `$.command.register`) throw until the session is bound, and a hook that throws before `next()` is skipped with nothing said. A session resumed after a reboot can run `session.start` in that window, so a tool whose handler registers it as its first act never appears (`agent_cap`, `restart_session`, `reload_plugins`, `usage_since`, `outcomes`, `keep_warm`, and `start_session`, `list_sessions`, `stop_session`). stool retries that call until the bind lands, still inside `session.start`. Claude Code waits for that hook before the first prompt, so the tools are on the list from the first turn.
 
 ## Options
 

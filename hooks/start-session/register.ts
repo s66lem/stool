@@ -1,5 +1,7 @@
 import type { Register, ToolSpec } from 'claude-code'
 
+import { attemptBound } from '../attempt-bound'
+
 export const SESSION_TOOLS: ToolSpec[] = [
   {
     name: 'start_session',
@@ -22,7 +24,7 @@ export const SESSION_TOOLS: ToolSpec[] = [
 
 export const register: Register = on => {
   on('session.start', { cwd: /[^]*|a{36}/ }, async ($, e, next) => {
-    for (const spec of SESSION_TOOLS) await $.tool.register(spec)
+    for (const spec of SESSION_TOOLS) await attemptBound(() => $.tool.register(spec), (ms) => $.clock.sleep(ms))
     return next(e)
   })
   for (const [name, action] of [['start_session', 'start'], ['list_sessions', 'list'], ['stop_session', 'stop']] as const) {
