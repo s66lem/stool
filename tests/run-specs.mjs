@@ -18,6 +18,7 @@ for (const m of mods) {
   for (const d of ['sounds', 'assets', 'skills']) if (existsSync(join(root, d))) cpSync(join(root, d), join(tmp, d), { recursive: true })
   cpSync(join(root, 'hooks', m), join(tmp, 'hooks', m), { recursive: true })
   cpSync(join(root, 'hooks/config.ts'), join(tmp, 'hooks/config.ts'))
+  cpSync(join(root, 'hooks/attempt-bound.ts'), join(tmp, 'hooks/attempt-bound.ts'))
   cpSync(join(root, 'hooks/reload-stamp.ts'), join(tmp, 'hooks/reload-stamp.ts'))
   renameSync(join(tmp, 'hooks', m, 'register.spec.ts'), join(tmp, 'hooks', m, 'register.test.ts'))
   const ext = existsSync(join(tmp, 'hooks', m, 'register.tsx')) ? 'tsx' : 'ts'
@@ -29,6 +30,11 @@ for (const m of mods) {
   console.log(`== ${m}\n${tail}`)
   if (r.status) failed++
   rmSync(tmp, { recursive: true, force: true })
+}
+{
+  const r = spawnSync(process.execPath, ['--experimental-strip-types', '--test', join(root, 'tests/attempt-bound.test.mjs')], { encoding: 'utf8' })
+  console.log(r.stdout + r.stderr)
+  if (r.status) failed++
 }
 if (mods.includes('start-session')) {
   const r = spawnSync(process.execPath, ['--test', join(root, 'tests/start-session.test.mjs')], { encoding: 'utf8' })

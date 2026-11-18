@@ -38,17 +38,24 @@ test('/ribbon answers its five lines as the command text, also with no usage sta
   expect(text?.split('\n')).toEqual(['🔴 —', '🟠 —', '🟢 —', '🔵 —', '🟣 —'])
 })
 
-test('a session that lost tools offers them again at the next prompt, and leaves the ones it has alone', OPT, async ($, on) => {
+test('a prompt does not re-register tools; they are offered at session.start, once the session is bound', OPT, async ($, on) => {
   mock.clock(on, { now: 10 * 3600_000 })
   const registered: string[] = []
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: ROOT }))
-  // the model's list after a resume: only plan_progress survived
-  on('tool.list', () => ({ value: [{ name: 'mcp__stool__plan_progress', description: '' }] }) as never)
   on('tool.register', (_$, e) => { registered.push(e.name); return { value: { tool: e.name } } })
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('session.id', () => ({ value: 's1' }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1000000, tokens: 1000 }, rateLimits: [] } }))
+  for (const n of ['get', 'set', 'delete']) on(('store.' + n) as never, () => ({ value: undefined }) as never)
+  on('store.keys', () => ({ value: [] }))
   on('prompt.submit', (_$, e) => ({ text: e.text }))
+  await $.session.start({ surface: null, isInteractive: false, cwd: ROOT })
+  const atStart = registered.length
+  expect(registered).toContain('agent_cap')
+  expect(registered).toContain('keep_warm')
   await $.prompt.submit({ text: 'hello', asUser: true, origin: { kind: 'composer' } } as never)
-  for (const t of ['agent_cap', 'restart_session', 'reload_plugins', 'usage_since', 'keep_warm', 'start_session', 'list_sessions', 'stop_session']) expect(registered).toContain(t)
-  expect(registered).not.toContain('plan_progress')
+  expect(registered.length).toBe(atStart)
 })
 
 test('planProgress off: plan_progress is never registered, offered again or named in the system prompt, and a stray call draws nothing', { options: { ...OPT.options, planProgress: false } }, async ($, on) => {

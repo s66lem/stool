@@ -2,6 +2,8 @@
 // It arms itself after every turn of a big session and gives up after MAX_PINGS idle pings in a row.
 import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
+import { attemptBound } from '../attempt-bound'
+
 import type { KeepWarmStrip } from '../../types'
 import { flag, inScope, roots } from '../config'
 
@@ -122,13 +124,17 @@ export const register: Register = (on, options) => {
   const s = freshState()
 
   on('session.start', { cwd: /[^]*|a{8}/ }, async ($, e, next) => {
-    await $.command.register({
-      name: 'keepwarm',
-      description: `Idle cache warming for this session: off, on, or a number of pings (default ${MAX_PINGS}, one per 50 idle minutes)`,
-    })
+    // command.register throws the same "no session is bound" as tool.register, and it is the first
+    // call here, so a throw used to skip the tool as well
+    await attemptBound(
+      () => $.command.register({
+        name: 'keepwarm',
+        description: `Idle cache warming for this session: off, on, or a number of pings (default ${MAX_PINGS}, one per 50 idle minutes)`,
+      }),
+      (ms) => $.clock.sleep(ms),
+    )
     s.scoped = inScope(e.cwd, roots(options))
-    if (s.scoped)
-      await $.tool.register(KEEP_WARM_TOOL)
+    if (s.scoped) await attemptBound(() => $.tool.register(KEEP_WARM_TOOL), (ms) => $.clock.sleep(ms))
     return next(e)
   })
 

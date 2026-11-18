@@ -1,5 +1,6 @@
 import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
+import { attemptBound } from '../attempt-bound'
 import { type Tier, dueTiers, parseTiers, text as opt } from '../config'
 import { RELOAD_STAMP } from '../reload-stamp'
 
@@ -149,8 +150,8 @@ export const register: Register = (on, options) => {
     heading: opt(options, 'restartHandoffHeading').trim() || 'RESUME HERE',
   }
   on('session.start', { cwd: /[^]*|a{6}/ }, async ($, e, next) => {
-    await $.tool.register(RESTART_TOOL)
-    await $.tool.register(RELOAD_TOOL)
+    await attemptBound(() => $.tool.register(RESTART_TOOL), (ms) => $.clock.sleep(ms))
+    await attemptBound(() => $.tool.register(RELOAD_TOOL), (ms) => $.clock.sleep(ms))
     return next(e)
   })
 

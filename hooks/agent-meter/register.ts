@@ -3,6 +3,7 @@
 // durationMs and usage (4 token counts); agent.spawn answers agentId. Live token counts need a turn.step stream hook: skipped.
 import type { EngineInterface, Register, ToolSpec } from 'claude-code'
 
+import { attemptBound } from '../attempt-bound'
 import { expand, flag, inScope, num, roots, text, trialOff } from '../config'
 import { WRITE_MULT, byProject, extraCols, fmtTokens, fmtW, parse, rate, since, sum, withHeader } from './ledger'
 import type { Anchor } from './ledger'
@@ -150,8 +151,8 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.start', { cwd: /[^]*|a{31}/ }, async ($, e, next) => {
-    await $.tool.register(USAGE_SINCE_TOOL)
-    await $.tool.register(OUTCOMES_TOOL)
+    await attemptBound(() => $.tool.register(USAGE_SINCE_TOOL), (ms) => $.clock.sleep(ms))
+    await attemptBound(() => $.tool.register(OUTCOMES_TOOL), (ms) => $.clock.sleep(ms))
     // the trial: one line per session with its arm, for bench/trial.mjs to read
     if (flag(options, 'trial') && inScope(e.cwd, roots(options))) {
       const id = await $.session.id()
