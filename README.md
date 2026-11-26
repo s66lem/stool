@@ -19,6 +19,22 @@
 
 </div>
 
+## Contents
+
+- [What you get](#what-you-get)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Parts](#parts)
+- [Tools (for the model)](#tools-for-the-model)
+- [State and files](#state-and-files)
+- [Tests](#tests)
+- [Notes](#notes)
+- [Advanced](#advanced)
+  - [Options](#options)
+  - [Commands](#commands)
+  - [Skills](#skills)
+- [Credits and license](#credits-and-license)
+
 ## What you get
 
 - 📊 **Progress bars** that the model keeps itself: staged plans, the active stage as a pill, one row per subagent with its model, tool and time.
@@ -60,6 +76,12 @@ claude plugin update stool@stool
 
 A running session keeps the version it started with, so restart Claude Code afterwards. Pick a scope when asked, then set the options (every one has a default). Needs Claude Code 2.1.275 or later. The options live in `/config` under the plugin's name and can also be edited in `settings.json` under `pluginConfigs`.
 
+## Quick start
+
+Install with the commands above, restart Claude Code, and open a session. A running session keeps the version it started with. Pick a scope when asked. Every option has a default, and the generic parts are on as soon as it is installed.
+
+Above the prompt: the usage strip (running agents against the cap, weekly and 5-hour usage with pace, keep-warm, context %). Beside the model: a Progress button and tok/s. The button is dim until there is a plan, and a bar appears when Claude starts a task with several steps. In the terminal, an emoji strip and a braille bar. The guards stay off until you switch them on in `/config` or the ⚙ settings window.
+
 ## Parts
 
 | Part | On by default | What it does |
@@ -78,62 +100,6 @@ A running session keeps the version it started with, so restart Claude Code afte
 | Capture guard (`capture-guard`) | no | Circuit breaker on a slow screen-capture tool (stops after two failures in a row) and a strip value with free RAM and the count of the watched app's windows. Windows only for the strip. |
 
 Tools can go missing in a session that resumed after a reboot (their registration ran before the session was bound). At every prompt stool checks the model's tool list and offers again whichever of `agent_cap`, `restart_session`, `reload_plugins`, `usage_since`, `outcomes` and `keep_warm` is missing; a re-offered tool shows from the next prompt.
-
-## Options
-
-All options are plugin `userConfig` fields. Lists are lists of strings; "regex source" fields take the text of a JavaScript regular expression (an invalid one matches nothing).
-
-| Option | Default | What it does |
-| --- | --- | --- |
-| `projectRoots` | empty | Folders (with their subfolders) where the folder-scoped parts run: keep-warm, agent-meter, restart-clock, and the guards. Empty = every folder. |
-| `doneBarSeconds` | 30 | Seconds a finished progress bar stays while auto-close (`/plan-progress-autoclose`) is on. |
-| `twinkle` | true | Animate the dots of the terminal bar while Claude works. |
-| `planProgress` | true | The progress bars. Off: no bars or agent strips drawn, no Progress button in the footer, no `plan_progress` tool, no prompt rules, reminders, edit gate or Stop block, so the model makes no extra calls: the tool is not in its tool list, the system prompt does not name it, a call kept from before the switch is refused, and subagents' strips are not tracked. The usage strip has its own switch. Also a switch in the settings window. |
-| `usageStrip` | true | The usage strip (the ribbon above the bars). Off: not drawn on any surface; `/ribbon` still prints its numbers on request. Also a switch in the settings window. |
-| `keepWarm` | true | Master switch for keep-warm. |
-| `stripAgents`, `stripWeekly`, `stripFive`, `stripWarm`, `stripContext` | true | Which groups the usage strip draws: agents / cap, weekly usage, 5-hour usage, keep-warm, context. Also switches in the settings window. |
-| `stripCodex` | true | Show the Codex agents running (`cx1`, teal, after the agent count): the Codex plugin's agents run on OpenAI, so they are listed apart and never count against the agent cap. Needs the dispatch guard. |
-| `stripCheap`, `stripProjection`, `stripReset` | true | How the strip draws them: the cheap-agent count in front (`1+2/4`), where each usage window is heading, and the time left to its reset. |
-| `slotFile` | `~/.claude/stool/agent-slots.json` | File shared by all sessions that counts running agents (written by the dispatch guard, read by the usage strip). |
-| `agentLedger` | `~/.claude/stool/agent-ledger.tsv` | Tab-separated ledger, one line per finished subagent (and per main turn when `ledgerMainTurns` is on). |
-| `bypassCommand` | false | Turns on the permission command above (the option keeps its 2.7 name). A plugin reload forgets a session-only mode; `--persist` survives reloads. |
-| `ledgerCacheWriteMult` | 1.4 | What a cache-write token costs against an input token when `usage_since` prices the ledger (1.25 for 5-minute writes, 2 for 1-hour writes; a turn's counts do not say which). |
-| `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
-| `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
-| `restartContextAt` | 65 | Legacy context-percent threshold, kept for back-compat; the clock uses whichever threshold comes first. Set `restartContextTokens` instead. |
-| `restartContextTokens` | 150000 | Set this token threshold for restart timing (0 = off); re-said every 50k after. The settings window has one **Restart due at** field accepting `275000`, `275k`, `1.2m`, `0` or `off`, with the matching read-only percent of the current window (e.g. `275k (27% of 1M)`). |
-| `restartAtPhaseEnd` | false | Also restart at the end of each phase (a line in the system prompt tells the model). Off, restarts follow the context threshold above, or happen when you ask. |
-| `reviewTiers` | `why-behind every 5`, `deep every 10` | Restart review tiers, one line each: `[name:] <type> every <N>` (N = every Nth restart, 0 = off; unparsable lines are skipped). `restart_session` reads `docs/restart_count.txt` and puts each due tier's instructions in front of the resume prompt. Types: `why-behind` (each goal metric vs its target in absolute units, time since it last moved, is the work closing the gap or tuning; rethink if it can't reach the goal, tell the user the decision) and `deep` (the last N restarts' handoffs, fix log, lessons and results: waste, rules broken twice with no check, stalled tools, drift; writes `docs/research/deep_review_<n>.md`, sends the top 3). Both carry the lessons pass and a foot-guns section. The settings window's Restarts section has a number field for each tier's interval (0 = off). |
-| `restartMode` | compact | How `restart_session` resets the context, or `off`: no restarts at all (`restart_session` refuses and queues nothing, the restart clock never says one is due, no phase-end line). Also three buttons in the settings window. `clear`: `/clear`, then the resume prompt as the next user message. `compact`: `/compact <focus>` (keep the task state and open items), then the resume prompt, the restart number and the `RESUME HERE` block of `resumeFile` (read from disk at the compaction, cut at 12k chars) go in as SessionStart(compact) context, and a background-task notification (a `cat` of `~/.claude/stool/restart-wake.txt`) starts the next turn, so nothing shows as your message; if that task cannot start, or no turn starts within 60 s, a framed `[automated ...]` plugin prompt goes instead. Compaction keeps the process: background tasks and other plugins' state survive. Set Claude Code's own `/autocompact` threshold above `restartContextTokens` so stool's restart fires first. |
-| `resumeFile` | `docs/HANDOFF.md` | The handoff whose `## RESUME HERE` block (to the next `## ` header; heading from `restartHandoffHeading`) a compact restart injects, relative to the session folder or absolute. Missing file or block: only the resume prompt goes in, and the text says so. |
-| `trial` | off | Randomized trial of the cost levers on your own sessions. With it on, `trialOffShare` percent (default 20) of sessions, chosen by session id, run with the token restart nudge, the default agent cap and the governor off; each session's arm goes to `~/.claude/stool/trial.jsonl`. After a week or two, `node bench/trial.mjs` compares cost per commit between the arms. |
-| `governor` | on | While the 5-hour or weekly window would run out early, lowers the restart threshold (150k, then 100k, then 75k) and the default agent tool-call cap (80, then 60, then 40). It changes neither models nor quality, only how soon a long context or a long agent is cut. |
-| `agentCallCap` | 80 | Tool calls an agent gets when its prompt states no cap (0 = off). Past it, an unfinished agent writes a handoff to `~/.claude/stool/relay/` and ends with `RELAY: <file>`; the lead is told to continue in a fresh agent that reads it (relay: the new agent starts small instead of carrying everything the first one read). Tools stop a quarter past the cap. |
-| `leadGuard` | false | Turn on the lead guard. |
-| `leadGuardDocPaths` | `docs/\|CLAUDE\.md` | Regex source: shell writes to matching paths are denied. Empty = rule off. |
-| `leadGuardCheckScripts` | `(check\|merge)\.mjs` | Regex source: piping these scripts through `tail`/`head` without `pipefail` is denied. Empty = rule off. |
-| `leadGuardImageNudge` | true | After the 3rd full-size image read, remind the main conversation to hand image checks to a cheaper subagent. |
-| `dispatchGuard` | false | Turn on the dispatch guard. |
-| `dispatchOrders` | two neutral lines | Lines appended to every Agent prompt (one per line, starting with `- `), followed by a tool-call cap line. |
-| `dispatchCapPattern` | empty | Regex source (case-insensitive). A prompt matching it must state a tool-call cap or the spawn is denied, and it also gets `dispatchCapOrders`. Empty = rule off. |
-| `dispatchCapOrders` | empty | Extra lines for prompts that match the cap pattern. |
-| `dispatchCheapAgents` | empty | Subagent types not counted against the agent cap (any Haiku-model agent never is). |
-| `captureGuard` | false | Turn on the capture guard. |
-| `captureTool` | empty | Full tool name to watch, for example `mcp__server__screen_capture`. Empty = no breaker. |
-| `captureProcess` | empty | Windows process name (no `.exe`) counted for the strip. Empty = no strip value. |
-| `restartPublishCounter` | false | Count commands matching `restartPublishPattern`; a restart is due after `restartPublishesAt` of them since the handoff was last rewritten. |
-| `restartPublishPattern` | empty | Regex source for the commands to count (a deploy or publish script). |
-| `restartPublishesAt` | 3 | Positive whole-number count at which a restart is due; editable in the settings window. |
-| `restartHandoffLint` | false | Warn when a write to the handoff file leaves two heading blocks or a stale `YYYY-MM-DD HH:MMZ` time. |
-| `restartHandoffFile` | `HANDOFF.md` | File name the lint and the counter reset watch. |
-| `restartHandoffHeading` | `RESUME HERE` | Heading text (after `## `) of the block rewritten on each restart. |
-| `restartRewriteCommand` | empty | Regex source for a shell command that rewrites the handoff block (resets the counter like an Edit or Write of it). |
-
-The settings window (`/plan-progress-settings`, or the gear in the footer) shows the running agents and has the bar, strip, footer, agent and restart switches in grouped sections (Restarts: mode compact / clear / off, the token and percent thresholds, the governor, the compact-mode handoff file, publishes per restart, the review intervals and the opt-in restart parts; free-text patterns and names stay in `/config`) (including the progress bars and usage strip on/off switches and each review tier's interval), with a note when a part still needs a `/config` value; the patterns and paths are edited in `/config`.
-
-## Commands
-
-`/progress`, `/progress-demo`, `/progress-sounds`, `/progress-clear`, `/progress-agents` (fold or show agent strips), `/plan-progress-autoclose`, `/plan-progress-settings`, `/ribbon` (print what the usage strip sees), `/keepwarm`, `/stoolpermission`.
 
 ## Tools (for the model)
 
@@ -193,27 +159,6 @@ only on stool's records and verify process identity before stopping a process.
 
 A subagent's shell commands also get `PLAN_PROGRESS_FILE` set to `~/.claude/stool/plan-progress-runs/<agentId>.json`; a script that writes `{"label","done","total"}` there gets a thin progress bar on that agent's strip while the file is under 30 s old.
 
-## Skills
-
-Manual workflow skills, invoked as `stool:<name>`: `plan-progress` (reference for the bars; user-invoked only, so it is not in the model's skill list), `ketchup` (read-only catch-up recap), `correct` (turn repeated mistakes into failing checks), `interrogate` (multi-model adversarial review of a diff), `arena` (N candidates, cross-judged), `autonomous-run` (drive to a checkable end state while you are away), `hillclimb` (tune one metric into a band, one change per measurement), `session-restart` (retrospective, handoff, then `restart_session`), `handoff` (write a continuation document), `setup` (`/stool:setup`: first asks, in one short menu, which parts you want: progress bars, usage strip, keep-warm, guards, review tiers and their intervals, restart threshold, and the project files; then sets the chosen options in your settings and adds `docs/HANDOFF.md` with one RESUME HERE block, `HANDOFF-history.md`, `TODO.md`, `FIXES.md`, `restart_count.txt` and a bookkeeping section in `CLAUDE.md`; on a repo with its own CLAUDE.md, notes or TODO files it suggests only the missing pieces, never overwriting), `quicksetup` (`/stool:quicksetup`: the same with every default and no questions; creates only missing files and prints what it did). `/stool:setup` replaces the old `/stool:project-setup`.
-
-### The session loop
-
-`/stool:setup` (or `/stool:quicksetup`) once per repo, then: work → the strip turns the context red (or the publish counter trips; phase ends too with `restartAtPhaseEnd`) → `/stool:session-restart` writes the retrospective and the handoff and clears into a fresh session that reads `RESUME HERE` and carries on. Long projects run for days this way without autocompact losing the thread.
-
-### Retrospectives, lessons and review tiers
-
-Every restart's retrospective (in `docs/FIXES.md`) lists waste, foot-guns (what slowed the work, with evidence, each fixed or assigned) and fixes, and runs the lessons pass: a mistake made more than once becomes a dated one-line lesson in the `## Lessons` list of the project skill for that area (newest first, at most ~15), an area that keeps needing the same instructions gets a proposed new project skill, and a lesson hit twice becomes a check script.
-
-The review tiers are deeper looks on a schedule. `docs/restart_count.txt` counts restarts (session-restart bumps it); when the count is a multiple of a tier's interval, `restart_session` puts that tier in front of the resume prompt, so the fresh session does it first:
-
-- **why-behind**, every 5th restart by default: is the goal metric closing its gap (absolute units, time since it last moved), or is the work tuning around it? Rethink the approach if it can't get there, and tell the user.
-- **deep**, every 10th: a review of the last ten restarts (waste against progress, repeated slips with no check script, stalled tools, drift), written to `docs/research/deep_review_<n>.md`, with lessons consolidated and the top 3 fixes sent to the user.
-
-Text and number fields in the Restarts card save on Enter or blur. Invalid values stay visible with an inline error and are not saved. The handoff field accepts a path relative to the session folder or an absolute path. Restart mode and governor keep their buttons.
-
-Set them in `/config` → stool → `reviewTiers` (`deep every 20`, `goal: why-behind every 3`, `deep every 0` to turn one off) or by typing the intervals in the settings window.
-
 ## State and files
 
 Plugin state (`$.state`, plugin `stool`): `plans`, `isOpen`, `tick`, `speed`, `prefs` (the bars); strip values `usage`, `warm`, `restart`, `meter`, `capture`. Files the plugin writes, all under `~/.claude/stool/`: `agent-slots.json`, `agent-ledger.tsv`, `plan-progress-runs/`.
@@ -225,6 +170,85 @@ Plugin state (`$.state`, plugin `stool`): `plans`, `isOpen`, `tick`, `speed`, `p
 ## Notes
 
 The engine allows one hooks module and refuses two matcherless hooks on one event, so colliding hooks carry an always-true regex matcher (`/[^]*|a{N}/` on a key every such event has) to stay distinct.
+
+## Advanced
+
+### Options
+
+All options are plugin `userConfig` fields. Lists are lists of strings; "regex source" fields take the text of a JavaScript regular expression (an invalid one matches nothing).
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `projectRoots` | empty | Folders (with their subfolders) where the folder-scoped parts run: keep-warm, agent-meter, restart-clock, and the guards. Empty = every folder. |
+| `doneBarSeconds` | 30 | Seconds a finished progress bar stays while auto-close (`/plan-progress-autoclose`) is on. |
+| `twinkle` | true | Animate the dots of the terminal bar while Claude works. |
+| `planProgress` | true | The progress bars. Off: no bars or agent strips drawn, no Progress button in the footer, no `plan_progress` tool, no prompt rules, reminders, edit gate or Stop block, so the model makes no extra calls: the tool is not in its tool list, the system prompt does not name it, a call kept from before the switch is refused, and subagents' strips are not tracked. The usage strip has its own switch. Also a switch in the settings window. |
+| `usageStrip` | true | The usage strip (the ribbon above the bars). Off: not drawn on any surface; `/ribbon` still prints its numbers on request. Also a switch in the settings window. |
+| `keepWarm` | true | Master switch for keep-warm. |
+| `stripAgents`, `stripWeekly`, `stripFive`, `stripWarm`, `stripContext` | true | Which groups the usage strip draws: agents / cap, weekly usage, 5-hour usage, keep-warm, context. Also switches in the settings window. |
+| `stripCodex` | true | Show the Codex agents running (`cx1`, teal, after the agent count): the Codex plugin's agents run on OpenAI, so they are listed apart and never count against the agent cap. Needs the dispatch guard. |
+| `stripCheap`, `stripProjection`, `stripReset` | true | How the strip draws them: the cheap-agent count in front (`1+2/4`), where each usage window is heading, and the time left to its reset. |
+| `slotFile` | `~/.claude/stool/agent-slots.json` | File shared by all sessions that counts running agents (written by the dispatch guard, read by the usage strip). |
+| `agentLedger` | `~/.claude/stool/agent-ledger.tsv` | Tab-separated ledger, one line per finished subagent (and per main turn when `ledgerMainTurns` is on). |
+| `bypassCommand` | false | Turns on the permission command above (the option keeps its 2.7 name). A plugin reload forgets a session-only mode; `--persist` survives reloads. |
+| `ledgerCacheWriteMult` | 1.4 | What a cache-write token costs against an input token when `usage_since` prices the ledger (1.25 for 5-minute writes, 2 for 1-hour writes; a turn's counts do not say which). |
+| `usageLog` | false | Append the 5-hour and weekly meter readings to `~/.claude/stool/usage-log.jsonl` each time one moves (`{t, five, week, weekResetsAt}` lines), for calibration. |
+| `ledgerMainTurns` | false | Also log the main conversation's turns to the ledger (a file write each turn), so `usage_since` can split lead from agents and calibrate weekly percent. |
+| `restartContextAt` | 65 | Legacy context-percent threshold, kept for back-compat; the clock uses whichever threshold comes first. Set `restartContextTokens` instead. |
+| `restartContextTokens` | 150000 | Set this token threshold for restart timing (0 = off); re-said every 50k after. The settings window has one **Restart due at** field accepting `275000`, `275k`, `1.2m`, `0` or `off`, with the matching read-only percent of the current window (e.g. `275k (27% of 1M)`). |
+| `restartAtPhaseEnd` | false | Also restart at the end of each phase (a line in the system prompt tells the model). Off, restarts follow the context threshold above, or happen when you ask. |
+| `reviewTiers` | `why-behind every 5`, `deep every 10` | Restart review tiers, one line each: `[name:] <type> every <N>` (N = every Nth restart, 0 = off; unparsable lines are skipped). `restart_session` reads `docs/restart_count.txt` and puts each due tier's instructions in front of the resume prompt. Types: `why-behind` (each goal metric vs its target in absolute units, time since it last moved, is the work closing the gap or tuning; rethink if it can't reach the goal, tell the user the decision) and `deep` (the last N restarts' handoffs, fix log, lessons and results: waste, rules broken twice with no check, stalled tools, drift; writes `docs/research/deep_review_<n>.md`, sends the top 3). Both carry the lessons pass and a foot-guns section. The settings window's Restarts section has a number field for each tier's interval (0 = off). |
+| `restartMode` | compact | How `restart_session` resets the context, or `off`: no restarts at all (`restart_session` refuses and queues nothing, the restart clock never says one is due, no phase-end line). Also three buttons in the settings window. `clear`: `/clear`, then the resume prompt as the next user message. `compact`: `/compact <focus>` (keep the task state and open items), then the resume prompt, the restart number and the `RESUME HERE` block of `resumeFile` (read from disk at the compaction, cut at 12k chars) go in as SessionStart(compact) context, and a background-task notification (a `cat` of `~/.claude/stool/restart-wake.txt`) starts the next turn, so nothing shows as your message; if that task cannot start, or no turn starts within 60 s, a framed `[automated ...]` plugin prompt goes instead. Compaction keeps the process: background tasks and other plugins' state survive. Set Claude Code's own `/autocompact` threshold above `restartContextTokens` so stool's restart fires first. |
+| `resumeFile` | `docs/HANDOFF.md` | The handoff whose `## RESUME HERE` block (to the next `## ` header; heading from `restartHandoffHeading`) a compact restart injects, relative to the session folder or absolute. Missing file or block: only the resume prompt goes in, and the text says so. |
+| `trial` | off | Randomized trial of the cost levers on your own sessions. With it on, `trialOffShare` percent (default 20) of sessions, chosen by session id, run with the token restart nudge, the default agent cap and the governor off; each session's arm goes to `~/.claude/stool/trial.jsonl`. After a week or two, `node bench/trial.mjs` compares cost per commit between the arms. |
+| `governor` | on | While the 5-hour or weekly window would run out early, lowers the restart threshold (150k, then 100k, then 75k) and the default agent tool-call cap (80, then 60, then 40). It changes neither models nor quality, only how soon a long context or a long agent is cut. |
+| `agentCallCap` | 80 | Tool calls an agent gets when its prompt states no cap (0 = off). Past it, an unfinished agent writes a handoff to `~/.claude/stool/relay/` and ends with `RELAY: <file>`; the lead is told to continue in a fresh agent that reads it (relay: the new agent starts small instead of carrying everything the first one read). Tools stop a quarter past the cap. |
+| `leadGuard` | false | Turn on the lead guard. |
+| `leadGuardDocPaths` | `docs/\|CLAUDE\.md` | Regex source: shell writes to matching paths are denied. Empty = rule off. |
+| `leadGuardCheckScripts` | `(check\|merge)\.mjs` | Regex source: piping these scripts through `tail`/`head` without `pipefail` is denied. Empty = rule off. |
+| `leadGuardImageNudge` | true | After the 3rd full-size image read, remind the main conversation to hand image checks to a cheaper subagent. |
+| `dispatchGuard` | false | Turn on the dispatch guard. |
+| `dispatchOrders` | two neutral lines | Lines appended to every Agent prompt (one per line, starting with `- `), followed by a tool-call cap line. |
+| `dispatchCapPattern` | empty | Regex source (case-insensitive). A prompt matching it must state a tool-call cap or the spawn is denied, and it also gets `dispatchCapOrders`. Empty = rule off. |
+| `dispatchCapOrders` | empty | Extra lines for prompts that match the cap pattern. |
+| `dispatchCheapAgents` | empty | Subagent types not counted against the agent cap (any Haiku-model agent never is). |
+| `captureGuard` | false | Turn on the capture guard. |
+| `captureTool` | empty | Full tool name to watch, for example `mcp__server__screen_capture`. Empty = no breaker. |
+| `captureProcess` | empty | Windows process name (no `.exe`) counted for the strip. Empty = no strip value. |
+| `restartPublishCounter` | false | Count commands matching `restartPublishPattern`; a restart is due after `restartPublishesAt` of them since the handoff was last rewritten. |
+| `restartPublishPattern` | empty | Regex source for the commands to count (a deploy or publish script). |
+| `restartPublishesAt` | 3 | Positive whole-number count at which a restart is due; editable in the settings window. |
+| `restartHandoffLint` | false | Warn when a write to the handoff file leaves two heading blocks or a stale `YYYY-MM-DD HH:MMZ` time. |
+| `restartHandoffFile` | `HANDOFF.md` | File name the lint and the counter reset watch. |
+| `restartHandoffHeading` | `RESUME HERE` | Heading text (after `## `) of the block rewritten on each restart. |
+| `restartRewriteCommand` | empty | Regex source for a shell command that rewrites the handoff block (resets the counter like an Edit or Write of it). |
+
+The settings window (`/plan-progress-settings`, or the gear in the footer) shows the running agents and has the bar, strip, footer, agent and restart switches in grouped sections (Restarts: mode compact / clear / off, the token and percent thresholds, the governor, the compact-mode handoff file, publishes per restart, the review intervals and the opt-in restart parts; free-text patterns and names stay in `/config`) (including the progress bars and usage strip on/off switches and each review tier's interval), with a note when a part still needs a `/config` value; the patterns and paths are edited in `/config`.
+
+### Commands
+
+`/progress`, `/progress-demo`, `/progress-sounds`, `/progress-clear`, `/progress-agents` (fold or show agent strips), `/plan-progress-autoclose`, `/plan-progress-settings`, `/ribbon` (print what the usage strip sees), `/keepwarm`, `/stoolpermission`.
+
+### Skills
+
+Manual workflow skills, invoked as `stool:<name>`: `plan-progress` (reference for the bars; user-invoked only, so it is not in the model's skill list), `ketchup` (read-only catch-up recap), `correct` (turn repeated mistakes into failing checks), `interrogate` (multi-model adversarial review of a diff), `arena` (N candidates, cross-judged), `autonomous-run` (drive to a checkable end state while you are away), `hillclimb` (tune one metric into a band, one change per measurement), `session-restart` (retrospective, handoff, then `restart_session`), `handoff` (write a continuation document), `setup` (`/stool:setup`: first asks, in one short menu, which parts you want: progress bars, usage strip, keep-warm, guards, review tiers and their intervals, restart threshold, and the project files; then sets the chosen options in your settings and adds `docs/HANDOFF.md` with one RESUME HERE block, `HANDOFF-history.md`, `TODO.md`, `FIXES.md`, `restart_count.txt` and a bookkeeping section in `CLAUDE.md`; on a repo with its own CLAUDE.md, notes or TODO files it suggests only the missing pieces, never overwriting), `quicksetup` (`/stool:quicksetup`: the same with every default and no questions; creates only missing files and prints what it did). `/stool:setup` replaces the old `/stool:project-setup`.
+
+#### The session loop
+
+`/stool:setup` (or `/stool:quicksetup`) once per repo, then: work → the strip turns the context red (or the publish counter trips; phase ends too with `restartAtPhaseEnd`) → `/stool:session-restart` writes the retrospective and the handoff and clears into a fresh session that reads `RESUME HERE` and carries on. Long projects run for days this way without autocompact losing the thread.
+
+#### Retrospectives, lessons and review tiers
+
+Every restart's retrospective (in `docs/FIXES.md`) lists waste, foot-guns (what slowed the work, with evidence, each fixed or assigned) and fixes, and runs the lessons pass: a mistake made more than once becomes a dated one-line lesson in the `## Lessons` list of the project skill for that area (newest first, at most ~15), an area that keeps needing the same instructions gets a proposed new project skill, and a lesson hit twice becomes a check script.
+
+The review tiers are deeper looks on a schedule. `docs/restart_count.txt` counts restarts (session-restart bumps it); when the count is a multiple of a tier's interval, `restart_session` puts that tier in front of the resume prompt, so the fresh session does it first:
+
+- **why-behind**, every 5th restart by default: is the goal metric closing its gap (absolute units, time since it last moved), or is the work tuning around it? Rethink the approach if it can't get there, and tell the user.
+- **deep**, every 10th: a review of the last ten restarts (waste against progress, repeated slips with no check script, stalled tools, drift), written to `docs/research/deep_review_<n>.md`, with lessons consolidated and the top 3 fixes sent to the user.
+
+Text and number fields in the Restarts card save on Enter or blur. Invalid values stay visible with an inline error and are not saved. The handoff field accepts a path relative to the session folder or an absolute path. Restart mode and governor keep their buttons.
+
+Set them in `/config` → stool → `reviewTiers` (`deep every 20`, `goal: why-behind every 3`, `deep every 0` to turn one off) or by typing the intervals in the settings window.
 
 ## Credits and license
 
